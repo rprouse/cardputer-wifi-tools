@@ -7,6 +7,7 @@
 #include "screen_manager.h"
 
 #include "channels_screen.h"
+#include "networks_screen.h"
 
 namespace app {
 namespace {
@@ -58,6 +59,12 @@ void ScreenManager::show_channels_screen() {
     has_loaded_page_ = true;
 }
 
+void ScreenManager::show_networks_screen() {
+    load_screen(std::make_unique<screen::NetworksScreen>(view_model_, assets_));
+    loaded_page_ = model::AppPage::Networks;
+    has_loaded_page_ = true;
+}
+
 void ScreenManager::request_page(model::AppPage page) {
     requested_page_ = page;
 
@@ -72,6 +79,11 @@ void ScreenManager::flush_requested_page() {
     page_switch_scheduled_ = false;
 
     if (has_loaded_page_ && requested_page_ == loaded_page_) {
+        return;
+    }
+
+    if (requested_page_ == model::AppPage::Networks) {
+        show_networks_screen();
         return;
     }
 

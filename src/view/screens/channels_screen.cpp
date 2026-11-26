@@ -55,6 +55,9 @@ std::string detail_text(const model::WifiModel& wifi) {
     }
 
     std::string text = "Ch " + std::to_string(channel->channel);
+    if (channel->has_connected) {
+        text += " (yours)";
+    }
     if (channel->network_count == 0) {
         text += "  no networks";
     }
@@ -70,6 +73,21 @@ std::string detail_text(const model::WifiModel& wifi) {
     }
     if (channel->utilization_percent >= 0) {
         text += "  load " + std::to_string(channel->utilization_percent) + "%";
+    }
+    return text;
+}
+
+std::string header_text(const model::WifiModel& wifi) {
+    std::string text = model::band_label(wifi.band());
+    const auto& best = wifi.recommendation();
+    if (best.first > 0) {
+        text += "   best " + std::to_string(best.first);
+        if (best.last != best.first) {
+            text += "-" + std::to_string(best.last);
+        }
+        if (best.dfs) {
+            text += " DFS";
+        }
     }
     return text;
 }
@@ -146,7 +164,7 @@ void ChannelsScreen::render() {
     const bool no_data = wifi.status() == model::ScanStatus::Starting ||
                          (wifi.status() == model::ScanStatus::Error && wifi.total_networks() == 0);
 
-    lv_label_set_text(band_label_, model::band_label(wifi.band()));
+    lv_label_set_text(band_label_, header_text(wifi).c_str());
     lv_obj_set_style_text_color(band_label_, colors.primary, 0);
     lv_obj_set_style_text_color(status_label_,
                                 wifi.status() == model::ScanStatus::Error ? colors.error : colors.text_disabled,
@@ -197,13 +215,16 @@ void ChannelsScreen::render() {
         lv_obj_set_style_bg_color(column.bar,
                                   stats.network_count > 0 ? bar_color(colors, stats.network_count) : colors.border,
                                   0);
+        // Outline the channel of the network this device is connected to.
+        lv_obj_set_style_border_width(column.bar, stats.has_connected ? 2 : 0, 0);
+        lv_obj_set_style_border_color(column.bar, colors.info, 0);
         lv_obj_remove_flag(column.bar, LV_OBJ_FLAG_HIDDEN);
 
         if (stats.network_count > 0) {
             lv_label_set_text_fmt(column.count, "%d", static_cast<int>(stats.network_count));
             lv_obj_set_width(column.count, 24);
             lv_obj_set_pos(column.count, center - 12, kBaselineY - bar_height - kCountHeight);
-            lv_obj_set_style_text_color(column.count, colors.text, 0);
+            lv_obj_set_style_text_color(column.count, stats.has_connected ? colors.info : colors.text, 0);
             lv_obj_remove_flag(column.count, LV_OBJ_FLAG_HIDDEN);
         }
         else {

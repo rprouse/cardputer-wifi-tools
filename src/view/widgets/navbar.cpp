@@ -46,6 +46,10 @@ NavBar::~NavBar() {
         lv_observer_remove(paused_observer_);
         paused_observer_ = nullptr;
     }
+    if (page_observer_) {
+        lv_observer_remove(page_observer_);
+        page_observer_ = nullptr;
+    }
 }
 
 void NavBar::build() {
@@ -67,6 +71,7 @@ void NavBar::build() {
     create_icon_buttons();
     theme_observer_ = reactive::observe_obj(core_obj_, view_model_.dark_mode_subject(), update_icons_cb, this);
     paused_observer_ = reactive::observe_obj(core_obj_, view_model_.scan_paused_subject(), update_icons_cb, this);
+    page_observer_ = reactive::observe_obj(core_obj_, view_model_.current_page_subject(), update_icons_cb, this);
     update_icon_buttons();
 }
 
@@ -88,6 +93,9 @@ void NavBar::create_icon_buttons() {
                                                         &view_model_,
                                                         true);
         icon_buttons_[i]->build();
+        // Nav buttons are driven by keys 4-8, not focus. Keep them out of the default focus group so
+        // ENTER (used to open the network list) never "clicks" whichever button happens to be focused.
+        lv_group_remove_obj(icon_buttons_[i]->root());
         lv_obj_set_style_translate_x(icon_buttons_[i]->root(), kNavButtonXOffsets[i], 0);
         platform::register_nav_button(i, icon_buttons_[i]->root());
     }
@@ -96,13 +104,15 @@ void NavBar::create_icon_buttons() {
 void NavBar::update_icon_buttons() {
     const char* theme_icon = view_model_.is_dark_mode() ? ICON_SUN : ICON_MOON;
     const char* scan_icon = view_model_.scan_paused() ? ICON_PLAY : ICON_PAUSE;
-    // Keys 4-8 map to these buttons from left to right.
+    const bool on_networks = view_model_.current_page() == model::AppPage::Networks;
+    // Keys 4-8 map to these buttons from left to right. ESC exits (chart) or goes back (list).
     const std::array<IconSpec, 5> icons = {{
-        {ICON_SIGN_OUT, request_quit_cb},
+        on_networks ? IconSpec{ICON_SQUARE_ARROW_LEFT, show_channels_cb}
+                    : IconSpec{ICON_SQUARE_ARROW_RIGHT, show_networks_cb},
         {ICON_WIFI_HIGH, toggle_band_cb},
         {theme_icon, toggle_theme_cb},
         {scan_icon, toggle_scan_paused_cb},
-        {"", nullptr},
+        on_networks ? IconSpec{ICON_SORT, cycle_sort_cb} : IconSpec{"", nullptr},
     }};
 
     platform::set_nav_shortcut_mode(false);
@@ -113,7 +123,9 @@ void NavBar::update_icon_buttons() {
         }
 
         button->set_text(icons[i].text);
-        lv_obj_remove_event_cb(button->root(), request_quit_cb);
+        lv_obj_remove_event_cb(button->root(), show_networks_cb);
+        lv_obj_remove_event_cb(button->root(), show_channels_cb);
+        lv_obj_remove_event_cb(button->root(), cycle_sort_cb);
         lv_obj_remove_event_cb(button->root(), toggle_band_cb);
         lv_obj_remove_event_cb(button->root(), toggle_theme_cb);
         lv_obj_remove_event_cb(button->root(), toggle_scan_paused_cb);
@@ -127,9 +139,21 @@ void NavBar::update_icon_buttons() {
     }
 }
 
-void NavBar::request_quit_cb(lv_event_t* event) {
+void NavBar::show_networks_cb(lv_event_t* event) {
     if (auto* view_model = view_model_from(event)) {
-        view_model->request_quit();
+        view_model->show_networks_page(0);
+    }
+}
+
+void NavBar::show_channels_cb(lv_event_t* event) {
+    if (auto* view_model = view_model_from(event)) {
+        view_model->show_channels_page();
+    }
+}
+
+void NavBar::cycle_sort_cb(lv_event_t* event) {
+    if (auto* view_model = view_model_from(event)) {
+        view_model->cycle_network_sort();
     }
 }
 

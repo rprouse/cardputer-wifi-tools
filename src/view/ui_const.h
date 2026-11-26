@@ -24,6 +24,7 @@ constexpr const char* ICON_PLUS               = "\uE3D4";
 constexpr const char* ICON_INFO               = "\uE2CE";
 constexpr const char* ICON_PAUSE              = "\uE39E";
 constexpr const char* ICON_PLAY               = "\uE3D0";
+constexpr const char* ICON_SORT               = "\uE444";
 constexpr const char* ICON_WIFI_NONE          = "\uE4F0";
 constexpr const char* ICON_WIFI_LOW           = "\uE4EC";
 constexpr const char* ICON_WIFI_MEDIUM        = "\uE4EE";

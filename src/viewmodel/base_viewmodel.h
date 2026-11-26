@@ -39,6 +39,9 @@ public:
     void toggle_dark_mode();
 
     model::AppPage current_page() const;
+    // Opens the network list; filter_channel limits it to one channel (0 = all).
+    void show_networks_page(int32_t filter_channel);
+    void show_channels_page();
     void request_quit();
 
     // WiFi scanning
@@ -49,6 +52,11 @@ public:
     void toggle_band();
     void select_previous_channel();
     void select_next_channel();
+    void select_previous_network();
+    void select_next_network();
+    void previous_network_filter();
+    void next_network_filter();
+    void cycle_network_sort();
 
 private:
     void publish_all();

@@ -86,6 +86,18 @@ model::AppPage BaseViewModel::current_page() const {
     return model_.current_page();
 }
 
+void BaseViewModel::show_networks_page(int32_t filter_channel) {
+    wifi_model_.set_network_filter(filter_channel);
+    model_.set_current_page(model::AppPage::Networks);
+    publish_wifi();
+    publish_all();
+}
+
+void BaseViewModel::show_channels_page() {
+    model_.set_current_page(model::AppPage::Channels);
+    publish_all();
+}
+
 void BaseViewModel::request_quit() {
     quit_requested_subject_.set(true);
 }
@@ -125,6 +137,31 @@ void BaseViewModel::select_previous_channel() {
 
 void BaseViewModel::select_next_channel() {
     wifi_model_.select_next();
+    publish_wifi();
+}
+
+void BaseViewModel::select_previous_network() {
+    wifi_model_.select_previous_network();
+    publish_wifi();
+}
+
+void BaseViewModel::select_next_network() {
+    wifi_model_.select_next_network();
+    publish_wifi();
+}
+
+void BaseViewModel::previous_network_filter() {
+    wifi_model_.previous_network_filter();
+    publish_wifi();
+}
+
+void BaseViewModel::next_network_filter() {
+    wifi_model_.next_network_filter();
+    publish_wifi();
+}
+
+void BaseViewModel::cycle_network_sort() {
+    wifi_model_.cycle_network_sort();
     publish_wifi();
 }
 
@@ -178,7 +215,9 @@ void BaseViewModel::poll_scanner() {
                                                      ap.frequency_mhz,
                                                      ap.channel,
                                                      ap.strength_percent,
-                                                     ap.channel_utilization_percent});
+                                                     ap.channel_utilization_percent,
+                                                     std::move(ap.security),
+                                                     ap.connected});
             }
             wifi_model_.apply_scan(std::move(aps));
         }

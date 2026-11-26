@@ -169,32 +169,47 @@ private:
             return true;
         }
 
+        const bool on_networks = view_model_.current_page() == model::AppPage::Networks;
         if (!long_pressed) {
-            // Cardputer arrow keycaps: ',' = left, '/' = right. Z/C also work.
+            // Arrow keys are Fn+Z/X/C/F on the CardputerZero; plain Z/X/C/F work too (no text entry here).
             switch (key) {
                 case LV_KEY_LEFT:
-                case ',':
                 case 'z':
                 case 'Z':
-                    view_model_.select_previous_channel();
+                    on_networks ? view_model_.previous_network_filter() : view_model_.select_previous_channel();
                     return true;
                 case LV_KEY_RIGHT:
-                case '/':
                 case 'c':
                 case 'C':
-                    view_model_.select_next_channel();
+                    on_networks ? view_model_.next_network_filter() : view_model_.select_next_channel();
+                    return true;
+                case LV_KEY_UP:
+                case 'f':
+                case 'F':
+                    if (on_networks) {
+                        view_model_.select_previous_network();
+                    }
+                    return true;
+                case LV_KEY_DOWN:
+                case 'x':
+                case 'X':
+                    if (on_networks) {
+                        view_model_.select_next_network();
+                    }
+                    return true;
+                case LV_KEY_ENTER:
+                    if (!on_networks) {
+                        if (const auto* channel = view_model_.wifi().selected_channel()) {
+                            view_model_.show_networks_page(channel->channel);
+                        }
+                    }
                     return true;
                 default:
                     break;
             }
         }
 
-        const bool is_escape = key == LV_KEY_ESC;
-        const bool is_home_exit_key =
-            key == '4' &&
-            ((!long_pressed && view_model_.current_page() == model::AppPage::Channels) ||
-             (long_pressed && exit_key_pressed_ == key));
-        if (!is_escape && !is_home_exit_key) {
+        if (key != LV_KEY_ESC) {
             return false;
         }
 
@@ -206,8 +221,12 @@ private:
         }
         else {
             exit_key_pressed_ = key;
-            exit_armed_ = view_model_.current_page() == model::AppPage::Channels;
-            if (exit_armed_) {
+            // ESC goes back from the network list; on the chart, holding it exits.
+            exit_armed_ = !on_networks;
+            if (on_networks) {
+                view_model_.show_channels_page();
+            }
+            else {
                 toast_->show_persistent_highlighted("Hold ",
                                                     "ESC",
                                                     " to exit",

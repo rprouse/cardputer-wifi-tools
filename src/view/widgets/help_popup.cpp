@@ -23,10 +23,18 @@ struct HelpRow {
 
 constexpr std::array<HelpRow, 5> kChannelRows = {{
     {"LEFT / RIGHT", "Select channel"},
-    {"5", "Switch 2.4 / 5 GHz"},
-    {"6", "Light / dark"},
-    {"7", "Pause / resume scan"},
-    {"HOLD ESC / 4", "Exit"},
+    {"OK", "Networks on channel"},
+    {"4", "All networks"},
+    {"5 / 6 / 7", "Band / theme / pause"},
+    {"HOLD ESC", "Exit"},
+}};
+
+constexpr std::array<HelpRow, 5> kNetworkRows = {{
+    {"UP / DOWN", "Select network"},
+    {"LEFT / RIGHT", "Filter by channel"},
+    {"8", "Sort: signal / ch / name"},
+    {"5 / 6 / 7", "Band / theme / pause"},
+    {"ESC / 4", "Back to channels"},
 }};
 
 } // namespace
@@ -150,16 +158,17 @@ bool HelpPopup::visible() const {
 }
 
 void HelpPopup::update_rows(model::AppPage page) {
-    LV_UNUSED(page);
-    lv_label_set_text(page_badge_, "CHANNELS");
+    const bool networks = page == model::AppPage::Networks;
+    const auto& rows = networks ? kNetworkRows : kChannelRows;
+    lv_label_set_text(page_badge_, networks ? "NETWORKS" : "CHANNELS");
     for (std::size_t i = 0; i < rows_.size(); ++i) {
-        if (i >= kChannelRows.size()) {
+        if (i >= rows.size()) {
             lv_obj_add_flag(rows_[i].row, LV_OBJ_FLAG_HIDDEN);
             continue;
         }
         lv_obj_remove_flag(rows_[i].row, LV_OBJ_FLAG_HIDDEN);
-        lv_label_set_text(rows_[i].key, kChannelRows[i].key);
-        lv_label_set_text(rows_[i].action, kChannelRows[i].action);
+        lv_label_set_text(rows_[i].key, rows[i].key);
+        lv_label_set_text(rows_[i].action, rows[i].action);
     }
 }
 

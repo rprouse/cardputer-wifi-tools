@@ -16,36 +16,24 @@
   </picture>
 </p>
 
-<div align="center">
-    <h1>WiFi Tools for CardputerZero</h1>
-</div>
+# WiFi Tools for CardputerZero
 
-<div align="center">
-  <p>See how crowded each WiFi channel is, on 2.4 GHz and 5 GHz.</p>
-</div>
+See how crowded each WiFi channel is, on 2.4 GHz and 5 GHz.
 
-<p align="center" style="margin: 20px 0; display: flex; justify-content: center; flex-wrap: wrap; gap: 12px;">
-  <img src="https://img.shields.io/badge/SDL3-173B73?style=flat-square&logo=sdl&logoColor=white" alt="SDL3" />
-  <img src="https://img.shields.io/badge/CMake-064F8C?style=flat-square&logo=cmake&logoColor=white" alt="CMake" />
-  <img src="https://img.shields.io/badge/LVGL-2A9FD6?style=flat-square&logo=lvgl&logoColor=white" alt="LVGL" />
-  <img src="https://img.shields.io/badge/Raspberry%20Pi-A22846?style=flat-square&logo=raspberrypi&logoColor=white" alt="Raspberry Pi" />
-</p>
-
-<p align="center">
-  <a href="https://discord.gg/ysQAWBUE9Q">
-    <img
-      src="https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=flat-square&logo=discord&logoColor=white"
-      alt="Join Discord"
-    />
-  </a>
-</p>
 WiFi Tools scans nearby networks every 5 seconds and draws one bar per channel. Use it to find the least congested channel for your own access point.
 
 Built from the [CardputerZero application template](https://github.com/CardputerZero/Template): desktop builds use an SDL simulator for fast UI preview, while device builds use the Linux/LVGL platform drivers.
 
 ## What It Shows
 
+### Channel chart
+
 - **Bar height**: number of networks whose primary channel is that channel. Bars are green (1-2), amber (3-4) or red (5+).
+- **Your network**: the channel of the network this device is connected to is outlined in blue, and the detail line says `(yours)`.
+- **Best channel** (header): the least congested choice for your own access point.
+  - 2.4 GHz: picks from 1, 6 and 11 (the non-overlapping channels), weighting each nearby network by signal strength and how much it overlaps.
+  - 5 GHz: picks an 80 MHz group (e.g. `149-161`) by the signal strength of networks inside it. Ties prefer non-DFS groups; `DFS` marks groups that need radar detection, which some routers and clients don't support.
+  - Networks with the same name as yours are ignored, since they are the ones you would be moving.
 - **Detail line** for the selected channel:
   - `N networks`: networks on the channel.
   - `best N%`: strongest signal on the channel.
@@ -53,18 +41,38 @@ Built from the [CardputerZero application template](https://github.com/Cardputer
   - `load N%`: channel utilisation advertised by an access point in its BSS Load element, when any AP broadcasts it.
 - **Status** (top right): networks in the current band and time since the last scan.
 
+### Network list
+
+One row per access point: signal, name (`(hidden)` when not broadcast), channel and security. Your connected network is shown in bold blue. Security is red for open networks and amber for weak ones (WEP, WPA1, WPA1/2 mixed mode). The bottom line shows the selected access point's BSSID and frequency.
+
 These are scan-based congestion measures, not packet counts. Counting real traffic needs a monitor-mode capable adapter.
 
 ## Keys
 
+Arrow keys are `Z` / `X` / `C` / `F` (left / down / right / up), with or without `Fn`.
+
+Channel chart:
+
 | Key | Action |
 | --- | --- |
-| Left / Right (`,` / `/`, or `Z` / `C`) | Select channel |
+| Left / Right | Select channel |
+| `OK` (Enter) | List the networks on the selected channel |
+| `4` | List all networks in the band |
 | `5` | Switch between 2.4 GHz and 5 GHz |
 | `6` | Light / dark theme |
 | `7` | Pause / resume scanning |
-| Hold `ESC` or `4` | Exit |
+| Hold `ESC` | Exit |
 | `Fn`+`H` | Keyboard help |
+
+Network list:
+
+| Key | Action |
+| --- | --- |
+| Up / Down | Select network |
+| Left / Right | Filter by channel (all, then each channel in use) |
+| `8` | Sort by signal, channel or name |
+| `5` / `6` / `7` | Band / theme / pause, as on the chart |
+| `ESC` or `4` | Back to the chart |
 
 ## Scan Backends
 
@@ -79,9 +87,9 @@ These are scan-based congestion measures, not packet counts. Counting real traff
 The app keeps the template's MVVM-style structure around LVGL:
 
 - **Platform**: `src/platform/wifi_scan.*` runs scans on a worker thread so the LVGL loop never blocks.
-- **Model**: `src/model/wifi_model.*` turns access points into per-channel statistics and tracks the selected band and channel.
+- **Model**: `src/model/wifi_model.*` turns access points into per-channel statistics, the best-channel pick and the sorted, filtered network list.
 - **View model**: `BaseViewModel` owns the scanner, polls it on an LVGL timer, and publishes changes through LVGL subjects.
-- **View**: `src/view/screens/channels_screen.*` draws the chart and re-renders when the WiFi or theme subjects change.
+- **View**: `src/view/screens/channels_screen.*` (chart) and `networks_screen.*` (list) re-render when the WiFi or theme subjects change.
 
 ## Repository Layout
 
@@ -117,6 +125,7 @@ The app keeps the template's MVVM-style structure around LVGL:
 - `src/platform/wifi_scan.*`: background WiFi scanner with Windows (wlanapi) and Linux (nmcli) backends.
 - `src/model/wifi_model.*`: per-channel statistics, band and channel selection.
 - `src/view/screens/channels_screen.*`: channel bar chart.
+- `src/view/screens/networks_screen.*`: network list.
 - `src/app/desktop_simulator_frame.*`: owns the desktop SDL window, renderer, high-resolution shell textures, input, and LVGL texture composition.
 - `src/config/lv_conf_desktop.h`: desktop LVGL rendering settings.
 - `src/config/lv_conf_cm0.h`: embedded Linux/CardputerZero LVGL settings.
@@ -305,7 +314,7 @@ MinGW-w64:
 ```powershell
 winget install BrechtSanders.WinLibs.POSIX.UCRT
 ```
-Alternatively, you can download from [`winlibs`](https://winlibs.com/). 
+Alternatively, you can download from [`winlibs`](https://winlibs.com/).
 
 Install vcpkg:
 
@@ -380,7 +389,7 @@ cmake --build --preset win32-mingw64-dbg
 #.\build\mingw64\Release\wifi-tools.exe
 ```
 > [!NOTE]
-> `VCPKG` will handle the dependencies during CMake configuration process automatically, 
+> `VCPKG` will handle the dependencies during CMake configuration process automatically,
 > this may take several minutes depend on you network connection.
 
 ## CardputerZero Cross Build
@@ -439,7 +448,7 @@ sudo apt install --no-install-recommends ./WiFiTools_0.1.0_rev1_arm64.deb
 
 ### Navigation Keys
 
-The bottom nav bar maps hardware/keyboard keys `4` to `8` to its five buttons, left to right: exit, switch band, theme, pause/resume, and an unused slot. Left/right channel selection is handled in `ShortcutController` (`src/app/app.cpp`). See [Keys](#keys) for the full list.
+The bottom nav bar maps hardware/keyboard keys `4` to `8` to its five buttons, left to right. On the chart: network list, switch band, theme, pause/resume, and an unused slot. On the list: back, switch band, theme, pause/resume, sort. Arrow keys, Enter and ESC are handled in `ShortcutController` (`src/app/app.cpp`). See [Keys](#keys) for the full list.
 
 ### Adding a Screen
 
@@ -519,7 +528,7 @@ cmake --workflow --preset cp0-cross-package
 ```
 
 > [!NOTE]
-> Use Debian based Linux host with CPack generator 
+> Use Debian based Linux host with CPack generator
 > as other OS may not resolve the dependencies correctly
 > no full dpkg, dpkg-shlibdeps, objdump and readelf support
 
@@ -529,4 +538,4 @@ If you have better framework designs on Embedded Linux or build system practice,
 
 # License
 
-Project released under MIT license. More license information can be found in assets folder. 
+Project released under MIT license. More license information can be found in assets folder.

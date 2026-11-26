@@ -30,7 +30,9 @@ private:
     void create_icon_buttons();
     void update_icon_buttons();
 
-    static void request_quit_cb(lv_event_t* event);
+    static void show_networks_cb(lv_event_t* event);
+    static void show_channels_cb(lv_event_t* event);
+    static void cycle_sort_cb(lv_event_t* event);
     static void toggle_band_cb(lv_event_t* event);
     static void toggle_theme_cb(lv_event_t* event);
     static void toggle_scan_paused_cb(lv_event_t* event);
@@ -42,6 +44,7 @@ private:
     lv_font_t* icon_font_{nullptr};
     lv_observer_t* theme_observer_{nullptr};
     lv_observer_t* paused_observer_{nullptr};
+    lv_observer_t* page_observer_{nullptr};
 };
 
 } // namespace view::widgets

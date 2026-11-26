@@ -54,6 +54,98 @@ int32_t read_bss_load_utilization(const unsigned char* ies, unsigned long size) 
     return -1;
 }
 
+void add_token(std::string& tokens, const char* token) {
+    if (tokens.find(token) != std::string::npos) {
+        return;
+    }
+    if (!tokens.empty()) {
+        tokens.push_back(' ');
+    }
+    tokens += token;
+}
+
+// Decodes the AKM suites of an RSN element (ID 48) into WPA2/WPA3/802.1X/OWE tokens.
+void read_rsn_akms(const unsigned char* data, unsigned char length, std::string& tokens) {
+    // version(2) + group cipher(4) + pairwise count(2)
+    if (length < 8) {
+        add_token(tokens, "WPA2");
+        return;
+    }
+    size_t offset = 6;
+    const size_t pairwise_count = data[offset] | (data[offset + 1] << 8);
+    offset += 2 + 4 * pairwise_count;
+    if (offset + 2 > length) {
+        add_token(tokens, "WPA2");
+        return;
+    }
+    const size_t akm_count = data[offset] | (data[offset + 1] << 8);
+    offset += 2;
+    bool any = false;
+    for (size_t i = 0; i < akm_count && offset + 4 <= length; ++i, offset += 4) {
+        if (data[offset] != 0x00 || data[offset + 1] != 0x0F || data[offset + 2] != 0xAC) {
+            continue;
+        }
+        any = true;
+        switch (data[offset + 3]) {
+            case 1:
+            case 3:
+            case 5:
+                add_token(tokens, "WPA2");
+                add_token(tokens, "802.1X");
+                break;
+            case 12:
+                add_token(tokens, "WPA3");
+                add_token(tokens, "802.1X");
+                break;
+            case 2:
+            case 4:
+            case 6:
+                add_token(tokens, "WPA2");
+                break;
+            case 8:
+            case 9:
+            case 24:
+            case 25:
+                add_token(tokens, "WPA3");
+                break;
+            case 18:
+                add_token(tokens, "OWE");
+                break;
+            default:
+                add_token(tokens, "WPA2");
+                break;
+        }
+    }
+    if (!any) {
+        add_token(tokens, "WPA2");
+    }
+}
+
+std::string read_security(const unsigned char* ies, unsigned long size, bool privacy) {
+    std::string tokens;
+    unsigned long offset = 0;
+    while (offset + 2 <= size) {
+        const unsigned char id = ies[offset];
+        const unsigned char length = ies[offset + 1];
+        if (offset + 2 + length > size) {
+            break;
+        }
+        const unsigned char* data = ies + offset + 2;
+        if (id == 48) {
+            read_rsn_akms(data, length, tokens);
+        }
+        else if (id == 221 && length >= 4 && data[0] == 0x00 && data[1] == 0x50 && data[2] == 0xF2 &&
+                 data[3] == 0x01) {
+            add_token(tokens, "WPA1");
+        }
+        offset += 2U + length;
+    }
+    if (tokens.empty() && privacy) {
+        tokens = "WEP";
+    }
+    return tokens;
+}
+
 std::string describe_wlan_error(const char* call, DWORD code) {
     if (code == ERROR_ACCESS_DENIED) {
         return "Access denied. Turn on Location in Windows Settings > Privacy & security > Location "
@@ -102,6 +194,23 @@ public:
         const GUID interface_guid = interfaces->InterfaceInfo[0].InterfaceGuid;
         WlanFreeMemory(interfaces);
 
+        std::string connected_bssid;
+        DWORD attributes_size = 0;
+        PWLAN_CONNECTION_ATTRIBUTES attributes = nullptr;
+        if (WlanQueryInterface(handle_,
+                               &interface_guid,
+                               wlan_intf_opcode_current_connection,
+                               nullptr,
+                               &attributes_size,
+                               reinterpret_cast<PVOID*>(&attributes),
+                               nullptr) == ERROR_SUCCESS &&
+            attributes) {
+            if (attributes->isState == wlan_interface_state_connected) {
+                connected_bssid = format_bssid(attributes->wlanAssociationAttributes.dot11Bssid);
+            }
+            WlanFreeMemory(attributes);
+        }
+
         PWLAN_BSS_LIST bss_list = nullptr;
         status = WlanGetNetworkBssList(handle_,
                                        &interface_guid,
@@ -126,6 +235,8 @@ public:
             ap.strength_percent = static_cast<int32_t>(entry.uLinkQuality);
             const auto* ies = reinterpret_cast<const unsigned char*>(&entry) + entry.ulIeOffset;
             ap.channel_utilization_percent = read_bss_load_utilization(ies, entry.ulIeSize);
+            ap.security = read_security(ies, entry.ulIeSize, (entry.usCapabilityInformation & 0x0010) != 0);
+            ap.connected = !connected_bssid.empty() && ap.bssid == connected_bssid;
             result.access_points.push_back(std::move(ap));
         }
         WlanFreeMemory(bss_list);
@@ -174,7 +285,7 @@ int32_t parse_int(const std::string& text, int32_t fallback) {
 
 bool run_nmcli(const char* rescan, std::string& output, int& exit_code) {
     std::string command =
-        "LC_ALL=C nmcli -t -e yes -f BSSID,SSID,CHAN,FREQ,SIGNAL device wifi list --rescan ";
+        "LC_ALL=C nmcli -t -e yes -f IN-USE,BSSID,SSID,CHAN,FREQ,SIGNAL,SECURITY device wifi list --rescan ";
     command += rescan;
     command += " 2>&1";
 
@@ -227,19 +338,21 @@ public:
             }
             const auto fields = split_terse(output.substr(start, end - start));
             start = end + 1;
-            if (fields.size() < 5) {
+            if (fields.size() < 7) {
                 continue;
             }
 
             WifiAccessPoint ap;
-            ap.bssid = fields[0];
-            ap.ssid = fields[1];
-            ap.frequency_mhz = parse_int(fields[3], 0);
+            ap.connected = fields[0] == "*";
+            ap.bssid = fields[1];
+            ap.ssid = fields[2];
+            ap.frequency_mhz = parse_int(fields[4], 0);
             ap.channel = wifi_frequency_to_channel(ap.frequency_mhz);
             if (ap.channel == 0) {
-                ap.channel = parse_int(fields[2], 0);
+                ap.channel = parse_int(fields[3], 0);
             }
-            ap.strength_percent = parse_int(fields[4], -1);
+            ap.strength_percent = parse_int(fields[5], -1);
+            ap.security = fields[6] == "--" ? std::string() : fields[6];
             if (ap.channel > 0) {
                 result.access_points.push_back(std::move(ap));
             }

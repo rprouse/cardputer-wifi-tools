@@ -10,6 +10,7 @@ namespace model {
 
 enum class AppPage {
     Channels = 0,
+    Networks = 1,
 };
 
 class BaseModel {

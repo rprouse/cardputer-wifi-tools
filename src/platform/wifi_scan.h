@@ -22,6 +22,11 @@ struct WifiAccessPoint {
     int32_t strength_percent{-1};
     // Channel utilisation advertised by the AP in its BSS Load element, or -1 when unknown.
     int32_t channel_utilization_percent{-1};
+    // Space-separated security tokens, e.g. "WPA2 WPA3", "WPA2 802.1X", "WEP", "OWE".
+    // Empty means an open network.
+    std::string security;
+    // True for the access point this device is currently associated with.
+    bool connected{false};
 };
 
 struct WifiScanResult {
