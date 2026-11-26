@@ -16,7 +16,7 @@
     ],
     "icon": "assets/images/wifi-tools.png",
     "license": "MIT",
-    "source_repo": "https://github.com/rprouse/cardputer-wifi-scanner",
+    "source_repo": "https://github.com/rprouse/cardputer-wifi-tools",
     "author": {
       "github": "rprouse",
       "display_name": "Rob Prouse"
