@@ -47,7 +47,7 @@
 #endif
 
 #ifndef APP_CONFIG_FILE
-#define APP_CONFIG_FILE "template-app.conf"
+#define APP_CONFIG_FILE "wifi-tools.conf"
 #endif
 
 namespace app {
@@ -72,13 +72,13 @@ std::string writable_config_path() {
     if (const char* xdg_config_home = std::getenv("XDG_CONFIG_HOME")) {
         const std::filesystem::path root(xdg_config_home);
         if (!root.empty() && root.is_absolute()) {
-            return (root / "template-app" / "template-app.conf").string();
+            return (root / "wifi-tools" / "wifi-tools.conf").string();
         }
     }
     if (const char* home = std::getenv("HOME")) {
         const std::filesystem::path root(home);
         if (!root.empty() && root.is_absolute()) {
-            return (root / ".config" / "template-app" / "template-app.conf").string();
+            return (root / ".config" / "wifi-tools" / "wifi-tools.conf").string();
         }
     }
     return APP_CONFIG_FILE;
@@ -169,10 +169,30 @@ private:
             return true;
         }
 
+        if (!long_pressed) {
+            // Cardputer arrow keycaps: ',' = left, '/' = right. Z/C also work.
+            switch (key) {
+                case LV_KEY_LEFT:
+                case ',':
+                case 'z':
+                case 'Z':
+                    view_model_.select_previous_channel();
+                    return true;
+                case LV_KEY_RIGHT:
+                case '/':
+                case 'c':
+                case 'C':
+                    view_model_.select_next_channel();
+                    return true;
+                default:
+                    break;
+            }
+        }
+
         const bool is_escape = key == LV_KEY_ESC;
         const bool is_home_exit_key =
             key == '4' &&
-            ((!long_pressed && view_model_.current_page() == model::AppPage::Apple) ||
+            ((!long_pressed && view_model_.current_page() == model::AppPage::Channels) ||
              (long_pressed && exit_key_pressed_ == key));
         if (!is_escape && !is_home_exit_key) {
             return false;
@@ -186,7 +206,7 @@ private:
         }
         else {
             exit_key_pressed_ = key;
-            exit_armed_ = view_model_.current_page() == model::AppPage::Apple;
+            exit_armed_ = view_model_.current_page() == model::AppPage::Channels;
             if (exit_armed_) {
                 toast_->show_persistent_highlighted("Hold ",
                                                     "ESC",
@@ -204,9 +224,6 @@ private:
 
         if (exit_armed_) {
             toast_->hide();
-        } else if (key == LV_KEY_ESC &&
-                   view_model_.current_page() == model::AppPage::Butter) {
-            view_model_.show_apple_page();
         }
         exit_key_pressed_ = 0;
         exit_armed_ = false;
@@ -270,7 +287,7 @@ lv_display_t* init_device_display() {
 
 int Application::run() {
     logger::Logger::init();
-    logger::Logger::set_tag("template");
+    logger::Logger::set_tag("wifi-tools");
 
     lv_init();
 
@@ -322,6 +339,7 @@ int Application::run() {
 
     ScreenManager screen_manager(view_model, assets);
     screen_manager.start();
+    view_model.start_scanning();
     ShortcutController shortcuts(view_model, assets);
 
     DarkModePersistence dark_mode_persistence{user_config_path, view_model.is_dark_mode()};

@@ -1,27 +1,32 @@
 {
-  "app_name": "Template",
-  "package_name": "template_app",
-  "version": "0.2.1",
-  "description": "Template Application for CardputerZero",
-
+  "app_name": "WiFi Tools",
+  "package_name": "wifi-tools",
+  "version": "0.1.0",
+  "description": "WiFi channel congestion scanner for CardputerZero",
   "store": {
-    "summary": "TODO: one line about your app (placeholders are auto-rejected)",
-    "description": "TODO: a longer description for the store detail page. Every TODO field in this store section must be replaced before publishing — the store validator rejects unedited template metadata.",
-    "categories": ["TODO: pick 1-2 real categories from docs/APP_BUILDER_JSON.md"],
-    "screenshots": [
-      "screenshot/app-simulator-dark-darwin.png",
-      "screenshot/app-simulator-light-darwin.png"
+    "summary": "See how crowded each WiFi channel is, on 2.4 GHz and 5 GHz.",
+    "description": "WiFi Tools scans nearby networks every few seconds and shows a bar per channel with how many networks use it, the strongest signal, overlapping 2.4 GHz networks, and the channel load that access points advertise. Use it to pick the least congested channel for your own access point.",
+    "categories": [
+      "System Tools",
+      "Radio & Comms"
     ],
-    "icon": "assets/images/template.png",
-    "license": "TODO: an SPDX id, e.g. MIT",
-    "source_repo": "https://github.com/CardputerZero/Template",
-    "author": { "github": "TODO-your-github-login", "display_name": "TODO: Your Name" },
-    "share_code": "TODO",
+    "screenshots": [
+      "screenshot/wifi-tools-light.png",
+      "screenshot/wifi-tools-dark.png"
+    ],
+    "icon": "assets/images/wifi-tools.png",
+    "license": "MIT",
+    "source_repo": "https://github.com/rprouse/cardputer-wifi-scanner",
+    "author": {
+      "github": "rprouse",
+      "display_name": "Rob Prouse"
+    },
+    "share_code": "WIFI",
     "permissions": {
       "camera": false,
       "microphone": false,
       "imu": false,
-      "network": false,
+      "network": true,
       "additional_hardware": false,
       "background_service": false,
       "external_display": false

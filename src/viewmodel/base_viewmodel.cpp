@@ -6,8 +6,16 @@
 
 #include "base_viewmodel.h"
 
+#include <cstdio>
+#include <cstring>
+#include <utility>
+#include <vector>
+
 namespace viewmodel {
 namespace {
+
+constexpr uint32_t kScanIntervalMs = 5000;
+constexpr uint32_t kPollIntervalMs = 250;
 
 int page_to_int(model::AppPage page) {
     return static_cast<int>(page);
@@ -17,22 +25,23 @@ int page_to_int(model::AppPage page) {
 
 BaseViewModel::BaseViewModel()
     : title_subject_(model_.app_title()),
-      greeting_subject_(model_.greeting()),
       dark_mode_subject_(model_.dark_mode()),
       current_page_subject_(page_to_int(model_.current_page())),
-      counter_subject_(0),
-      bold_text_subject_(false),
-      info_visible_subject_(false),
-      quit_requested_subject_(false) {}
+      quit_requested_subject_(false),
+      wifi_revision_subject_(0),
+      scan_paused_subject_(false),
+      scan_status_subject_("Scanning...") {}
 
-BaseViewModel::~BaseViewModel() = default;
+BaseViewModel::~BaseViewModel() {
+    if (poll_timer_) {
+        lv_timer_delete(poll_timer_);
+        poll_timer_ = nullptr;
+    }
+    scanner_.stop();
+}
 
 lv_subject_t* BaseViewModel::title_subject() {
     return title_subject_.native();
-}
-
-lv_subject_t* BaseViewModel::greeting_subject() {
-    return greeting_subject_.native();
 }
 
 lv_subject_t* BaseViewModel::dark_mode_subject() {
@@ -43,20 +52,20 @@ lv_subject_t* BaseViewModel::current_page_subject() {
     return current_page_subject_.native();
 }
 
-lv_subject_t* BaseViewModel::counter_subject() {
-    return counter_subject_.native();
-}
-
-lv_subject_t* BaseViewModel::bold_text_subject() {
-    return bold_text_subject_.native();
-}
-
-lv_subject_t* BaseViewModel::info_visible_subject() {
-    return info_visible_subject_.native();
-}
-
 lv_subject_t* BaseViewModel::quit_requested_subject() {
     return quit_requested_subject_.native();
+}
+
+lv_subject_t* BaseViewModel::wifi_revision_subject() {
+    return wifi_revision_subject_.native();
+}
+
+lv_subject_t* BaseViewModel::scan_paused_subject() {
+    return scan_paused_subject_.native();
+}
+
+lv_subject_t* BaseViewModel::scan_status_subject() {
+    return scan_status_subject_.native();
 }
 
 bool BaseViewModel::is_dark_mode() const {
@@ -77,47 +86,116 @@ model::AppPage BaseViewModel::current_page() const {
     return model_.current_page();
 }
 
-void BaseViewModel::show_apple_page() {
-    model_.set_current_page(model::AppPage::Apple);
-    publish_all();
-}
-
-void BaseViewModel::show_butter_page() {
-    model_.set_current_page(model::AppPage::Butter);
-    publish_all();
-}
-
-void BaseViewModel::toggle_page() {
-    model_.toggle_page();
-    publish_all();
-}
-
-void BaseViewModel::increment_counter() {
-    counter_subject_.set(counter_subject_.value() + 1);
-}
-
-void BaseViewModel::decrement_counter() {
-    const auto next = counter_subject_.value() - 1;
-    counter_subject_.set(next < 0 ? 0 : next);
-}
-
-void BaseViewModel::toggle_bold_text() {
-    bold_text_subject_.toggle();
-}
-
-void BaseViewModel::toggle_info() {
-    info_visible_subject_.toggle();
-}
-
 void BaseViewModel::request_quit() {
     quit_requested_subject_.set(true);
 }
 
+void BaseViewModel::start_scanning() {
+    if (poll_timer_) {
+        return;
+    }
+    scanner_.start(kScanIntervalMs);
+    poll_timer_ = lv_timer_create(poll_timer_cb, kPollIntervalMs, this);
+}
+
+const model::WifiModel& BaseViewModel::wifi() const {
+    return wifi_model_;
+}
+
+bool BaseViewModel::scan_paused() const {
+    return scanner_.paused();
+}
+
+void BaseViewModel::toggle_scan_paused() {
+    const bool paused = !scanner_.paused();
+    scanner_.set_paused(paused);
+    scan_paused_subject_.set(paused);
+    update_status_text();
+}
+
+void BaseViewModel::toggle_band() {
+    wifi_model_.toggle_band();
+    publish_wifi();
+}
+
+void BaseViewModel::select_previous_channel() {
+    wifi_model_.select_previous();
+    publish_wifi();
+}
+
+void BaseViewModel::select_next_channel() {
+    wifi_model_.select_next();
+    publish_wifi();
+}
+
 void BaseViewModel::publish_all() {
     title_subject_.set(model_.app_title());
-    greeting_subject_.set(model_.greeting());
     dark_mode_subject_.set(model_.dark_mode());
     current_page_subject_.set(page_to_int(model_.current_page()));
+}
+
+void BaseViewModel::publish_wifi() {
+    wifi_revision_subject_.set(wifi_revision_subject_.value() + 1);
+    update_status_text();
+}
+
+void BaseViewModel::update_status_text() {
+    char text[48];
+    if (scanner_.paused()) {
+        std::snprintf(text, sizeof(text), "Paused");
+    }
+    else if (!has_result_) {
+        std::snprintf(text, sizeof(text), "Scanning...");
+    }
+    else if (wifi_model_.status() == model::ScanStatus::Error) {
+        std::snprintf(text, sizeof(text), "Scan failed");
+    }
+    else {
+        const uint32_t age_s = lv_tick_elaps(last_result_tick_) / 1000;
+        std::snprintf(text,
+                      sizeof(text),
+                      "%u nets  %us ago",
+                      static_cast<unsigned>(wifi_model_.band_networks()),
+                      static_cast<unsigned>(age_s));
+    }
+
+    if (std::strcmp(text, scan_status_subject_.value()) != 0) {
+        scan_status_subject_.set(text);
+    }
+}
+
+void BaseViewModel::poll_scanner() {
+    platform::WifiScanResult result;
+    if (scanner_.take_result(result)) {
+        has_result_ = true;
+        last_result_tick_ = lv_tick_get();
+        if (result.ok) {
+            std::vector<model::AccessPointInfo> aps;
+            aps.reserve(result.access_points.size());
+            for (auto& ap : result.access_points) {
+                aps.push_back(model::AccessPointInfo{std::move(ap.ssid),
+                                                     std::move(ap.bssid),
+                                                     ap.frequency_mhz,
+                                                     ap.channel,
+                                                     ap.strength_percent,
+                                                     ap.channel_utilization_percent});
+            }
+            wifi_model_.apply_scan(std::move(aps));
+        }
+        else {
+            wifi_model_.apply_error(std::move(result.error));
+        }
+        publish_wifi();
+        return;
+    }
+    update_status_text();
+}
+
+void BaseViewModel::poll_timer_cb(lv_timer_t* timer) {
+    auto* self = static_cast<BaseViewModel*>(lv_timer_get_user_data(timer));
+    if (self) {
+        self->poll_scanner();
+    }
 }
 
 } // namespace viewmodel

@@ -2,26 +2,26 @@
   <picture>
     <source
       media="(prefers-color-scheme: dark)"
-      srcset="./screenshot/app-simulator-dark-darwin.png"
+      srcset="./screenshot/wifi-tools-dark.png"
     />
     <source
       media="(prefers-color-scheme: light)"
-      srcset="./screenshot/app-simulator-light-darwin.png"
+      srcset="./screenshot/wifi-tools-light.png"
     />
   <img
-    src="./screenshot/app-simulator-light-darwin.png"
-    alt="CardputerZero Template running in the desktop simulator"
+    src="./screenshot/wifi-tools-light.png"
+    alt="WiFi Tools running in the desktop simulator"
     width="315"
   />
   </picture>
 </p>
 
 <div align="center">
-    <h1>CardputerZero Application Template</h1>
+    <h1>WiFi Tools for CardputerZero</h1>
 </div>
 
 <div align="center">
-  <p>A simple starter template for building embedded Linux GUI applications with LVGL and CMake.</p>
+  <p>See how crowded each WiFi channel is, on 2.4 GHz and 5 GHz.</p>
 </div>
 
 <p align="center" style="margin: 20px 0; display: flex; justify-content: center; flex-wrap: wrap; gap: 12px;">
@@ -39,23 +39,49 @@
     />
   </a>
 </p>
-It is intended to be used as a clean development baseline: desktop builds use an SDL hardware-accelerated compositor for fast UI preview, while device builds use the Linux/LVGL platform drivers.
+WiFi Tools scans nearby networks every 5 seconds and draws one bar per channel. Use it to find the least congested channel for your own access point.
+
+Built from the [CardputerZero application template](https://github.com/CardputerZero/Template): desktop builds use an SDL simulator for fast UI preview, while device builds use the Linux/LVGL platform drivers.
+
+## What It Shows
+
+- **Bar height**: number of networks whose primary channel is that channel. Bars are green (1-2), amber (3-4) or red (5+).
+- **Detail line** for the selected channel:
+  - `N networks`: networks on the channel.
+  - `best N%`: strongest signal on the channel.
+  - `overlap N` (2.4 GHz only): networks on other channels within 4 channels, which share airtime with this one.
+  - `load N%`: channel utilisation advertised by an access point in its BSS Load element, when any AP broadcasts it.
+- **Status** (top right): networks in the current band and time since the last scan.
+
+These are scan-based congestion measures, not packet counts. Counting real traffic needs a monitor-mode capable adapter.
+
+## Keys
+
+| Key | Action |
+| --- | --- |
+| Left / Right (`,` / `/`, or `Z` / `C`) | Select channel |
+| `5` | Switch between 2.4 GHz and 5 GHz |
+| `6` | Light / dark theme |
+| `7` | Pause / resume scanning |
+| Hold `ESC` or `4` | Exit |
+| `Fn`+`H` | Keyboard help |
+
+## Scan Backends
+
+| Platform | Backend | Notes |
+| --- | --- | --- |
+| CardputerZero / Linux | NetworkManager via `nmcli` | Requests a rescan each cycle and falls back to cached results if the rescan is refused. `nmcli` does not expose BSS Load, so `load` is not shown. |
+| Windows simulator | Native WLAN API (`wlanapi`) | Uses your PC's WiFi adapter. Windows requires **Location** access to be on for desktop apps, otherwise the scan reports "Access denied". |
+| macOS simulator | None | Shows "WiFi scanning is not supported on this platform." |
 
 ## Project Overview
 
-In this example project, we used small MVVM-style structure around LVGL:
+The app keeps the template's MVVM-style structure around LVGL:
 
-- **UI layer**: screens and widgets are implemented with LVGL objects. `BaseScreen` owns the page root, title bar, nav bar, and page content. Widgets derive from `BaseWidgets` and expose a `build()` entry point.
-- **Data model**: `BaseModel` stores application state such as current page and theme mode.
-- **View model**: `BaseViewModel` exposes model state as LVGL observer subjects and provides UI actions such as page switching, counter updates, theme toggle, and quit request.
-- **Reactive/data binding**: `src/reactive` wraps LVGL observer subjects and common bindings so labels, styles, flags, widget values, and events can be connected to application state.
-- **Data flow**: user input triggers widget callbacks, callbacks update `BaseViewModel`, view model publishes subjects, and bound UI objects refresh automatically through LVGL observers.
-- **Platform layer**: platform code owns Linux input integration and other hardware-facing services. The nav bar maps hardware/keyboard keys `4` to `8`, plus `ESC` for quit.
-
-Current demo UI:
-
-- Page 1: Hello World, font weight toggle, LVGL version info, light/dark theme toggle, page navigation.
-- Page 2: Counter page, increment/decrement actions, simple page navigation.
+- **Platform**: `src/platform/wifi_scan.*` runs scans on a worker thread so the LVGL loop never blocks.
+- **Model**: `src/model/wifi_model.*` turns access points into per-channel statistics and tracks the selected band and channel.
+- **View model**: `BaseViewModel` owns the scanner, polls it on an LVGL timer, and publishes changes through LVGL subjects.
+- **View**: `src/view/screens/channels_screen.*` draws the chart and re-renders when the WiFi or theme subjects change.
 
 ## Repository Layout
 
@@ -87,7 +113,10 @@ Current demo UI:
 ### Modules
 
 - `src/app/asset_manager.*`: resolves runtime assets from the optional CMake asset root, source tree `assets/`, and installed `/usr/share/<APP_NAME>/` path.
-- `src/app/screen_namager.cpp`: switches LVGL screens when the current page subject changes.
+- `src/app/screen_manager.cpp`: switches LVGL screens when the current page subject changes.
+- `src/platform/wifi_scan.*`: background WiFi scanner with Windows (wlanapi) and Linux (nmcli) backends.
+- `src/model/wifi_model.*`: per-channel statistics, band and channel selection.
+- `src/view/screens/channels_screen.*`: channel bar chart.
 - `src/app/desktop_simulator_frame.*`: owns the desktop SDL window, renderer, high-resolution shell textures, input, and LVGL texture composition.
 - `src/config/lv_conf_desktop.h`: desktop LVGL rendering settings.
 - `src/config/lv_conf_cm0.h`: embedded Linux/CardputerZero LVGL settings.
@@ -104,9 +133,9 @@ Common CMake cache options:
 | Option | Default | Description |
 | --- | --- | --- |
 | `USE_DESKTOP` | `ON` | Build SDL desktop simulator when `ON`; build embedded Linux target when `OFF`. |
-| `APP_NAME` | `template_app` | Application name used by installed asset lookup. |
+| `APP_NAME` | `wifi-tools` | Application name used by installed asset lookup. |
 | `APP_ASSETS_ROOT` | empty | Optional runtime asset root. Expected layout includes `fonts/`, `images/`, etc. |
-| `APP_CONFIG_FILE` | platform default | Optional config path. Defaults to `config/template-app.conf` for desktop builds and `/etc/template-app.conf` for device builds. |
+| `APP_CONFIG_FILE` | platform default | Optional config path. Defaults to `config/wifi-tools.conf` for desktop builds and `/etc/wifi-tools.conf` for device builds. |
 | `APP_KEY_INPUT_DEVICE` | empty | Optional Linux evdev device path, e.g. `/dev/input/event0`. Empty means auto-scan `/dev/input/event*`. |
 | `APP_FRAMEBUFFER_DEVICE` | `/dev/fb0` | Linux framebuffer device used by embedded builds when `APP_USE_DRM=OFF`. |
 | `APP_USE_DRM` | `OFF` | Use LVGL's Linux DRM/KMS backend instead of fbdev for embedded builds. |
@@ -119,7 +148,7 @@ Asset lookup order:
 2. source-tree `assets/` for development
 3. `/usr/share/<APP_NAME>/` for installed deployments
 
-Theme startup behavior is configured in `config/template-app.conf`:
+Theme startup behavior is configured in `config/wifi-tools.conf`:
 
 ```ini
 [application]
@@ -127,9 +156,9 @@ dark_mode=yes
 ```
 
 Set `dark_mode` to `yes` or `no`. The parser also accepts `true`/`false` and `1`/`0`.
-Installed device builds use `/etc/template-app.conf` as the system default. Changing the theme
+Installed device builds use `/etc/wifi-tools.conf` as the system default. Changing the theme
 from the navigation bar (keyboard shortcut `6`) writes a per-user override to
-`$XDG_CONFIG_HOME/template-app/template-app.conf`, or `~/.config/template-app/template-app.conf`
+`$XDG_CONFIG_HOME/wifi-tools/wifi-tools.conf`, or `~/.config/wifi-tools/wifi-tools.conf`
 when `XDG_CONFIG_HOME` is not set. The per-user file takes precedence on the next launch.
 
 ## Desktop Builds
@@ -190,9 +219,9 @@ cmake --build --preset linux-x86-64-dbg
 Run:
 
 ```shell
-./build/linux-x86-64/Debug/template_app
+./build/linux-x86-64/Debug/wifi-tools
 # or launch release build
-# ./build/linux-x86-64/Release/template_app
+# ./build/linux-x86-64/Release/wifi-tools
 ```
 
 ### macOS Desktop
@@ -235,9 +264,9 @@ cmake --build --preset darwin-arm64-dbg
 Run:
 
 ```shell
-./build/darwin-arm64/Debug/template_app
+./build/darwin-arm64/Debug/wifi-tools
 # or launch release build
-# ./build/darwin-arm64/Release/template_app
+# ./build/darwin-arm64/Release/wifi-tools
 ```
 
 For Intel macOS, use the `darwin-x86-64` configure preset and matching build preset:
@@ -247,9 +276,9 @@ cmake --preset darwin-x86-64
 cmake --build --preset darwin-x86-64-dbg
 # alternatively, you can run release build
 # cmake --build --preset darwin-x86-64-rel
-./build/darwin-x86-64/Debug/template_app
+./build/darwin-x86-64/Debug/wifi-tools
 # or launch release build
-# ./build/darwin-x86-64/Release/template_app
+# ./build/darwin-x86-64/Release/wifi-tools
 ```
 
 ### Windows Desktop
@@ -315,11 +344,11 @@ Configure and build with MSVC:
 ```powershell
 cmake --preset win32-msvc
 cmake --build --preset win32-msvc-dbg
-.\build\msvc\Debug\template_app.exe
+.\build\msvc\Debug\wifi-tools.exe
 
 # alternatively for release build
 # cmake --build --preset win32-msvc-rel
-# .\build\msvc\Release\template_app.exe
+# .\build\msvc\Release\wifi-tools.exe
 ```
 
 Configure and build with MinGW-w64:
@@ -344,11 +373,11 @@ Configure and build with MinGW-w64:
 ```powershell
 cmake --preset win32-mingw64
 cmake --build --preset win32-mingw64-dbg
-.\build\mingw64\Debug\template_app.exe
+.\build\mingw64\Debug\wifi-tools.exe
 
 # alternatively for release build
 # cmake --build --preset win32-mingw64-rel
-#.\build\mingw64\Release\template_app.exe
+#.\build\mingw64\Release\wifi-tools.exe
 ```
 > [!NOTE]
 > `VCPKG` will handle the dependencies during CMake configuration process automatically, 
@@ -402,7 +431,7 @@ By default, the debian package is copied to '$HOME' folder, normally it's under 
 On your device, install the copied package with `apt` and replace the package file name with the one you copied:
 
 ```shell
-sudo apt install --no-install-recommends ./TemplateApp_0.2.1_rev1_arm64.deb
+sudo apt install --no-install-recommends ./WiFiTools_0.1.0_rev1_arm64.deb
 ```
 
 
@@ -410,24 +439,7 @@ sudo apt install --no-install-recommends ./TemplateApp_0.2.1_rev1_arm64.deb
 
 ### Navigation Keys
 
-The first page bottom nav bar maps hardware/keyboard keys from left to right:
-
-| Key | Nav item |
-| --- | --- |
-| `4` | First icon button |
-| `5` | Second icon button |
-| `6` | Third icon button |
-| `7` | Fourth icon button |
-| `8` | Fifth icon button |
-| `ESC` | First icon button / quit |
-
-The counter page uses direct keyboard shortcuts:
-
-| Key | Action |
-| --- | --- |
-| `ESC` | Return to the first page |
-| `Left` | Decrease the counter |
-| `Right` | Increase the counter |
+The bottom nav bar maps hardware/keyboard keys `4` to `8` to its five buttons, left to right: exit, switch band, theme, pause/resume, and an unused slot. Left/right channel selection is handled in `ShortcutController` (`src/app/app.cpp`). See [Keys](#keys) for the full list.
 
 ### Adding a Screen
 
@@ -478,20 +490,19 @@ Debian packages are produced with CPack and written to `dist/`. The package file
 Default example:
 
 ```text
-dist/TemplateApp_0.2.1_rev1_arm64.deb
+dist/WiFiTools_0.1.0_rev1_arm64.deb
 ```
 
 Package layout:
 
 | Path | Content |
 | --- | --- |
-| `/usr/bin/template_app` | Application executable. |
-| `/etc/template-app.conf` | System-default application settings, including the startup theme. |
-| `/usr/share/template_app/` | Runtime assets: fonts, images, audio. |
-| `/usr/share/APPLaunch/applications/template_app.desktop` | APPLaunch launcher entry. |
-| `/usr/share/APPLaunch/share/images/template*.png` | APPLaunch launcher icons/fallbacks. |
-| `/usr/lib/systemd/system/template_app.service` | Optional systemd service for embedded autostart. |
-| `/usr/share/doc/template_app/` | README and third-party asset license notes. |
+| `/usr/bin/wifi-tools` | Application executable. |
+| `/etc/wifi-tools.conf` | System-default application settings, including the startup theme. |
+| `/usr/share/wifi-tools/` | Runtime assets: fonts, images, audio. |
+| `/usr/share/APPLaunch/applications/wifi-tools.desktop` | APPLaunch launcher entry. |
+| `/usr/share/APPLaunch/share/images/wifi-tools*.png` | APPLaunch launcher icons/fallbacks. |
+| `/usr/share/doc/wifi-tools/` | README and third-party asset license notes. |
 
 Build and package:
 

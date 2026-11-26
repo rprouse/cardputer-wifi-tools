@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=@APP_DISPLAY_NAME@
+Name=@APP_LAUNCHER_NAME@
 Comment=@APP_PACKAGE_DESCRIPTION@
 Exec=/usr/bin/@PROJECT_NAME@
-Icon=share/images/template.png
+Icon=share/images/wifi-tools.png
 Terminal=false
 Categories=Utility;
 StartupNotify=false

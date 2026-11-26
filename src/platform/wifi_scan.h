@@ -1,0 +1,75 @@
+/*
+ * SPDX-License-Identifier: MIT
+ */
+
+#pragma once
+
+#include <atomic>
+#include <condition_variable>
+#include <cstdint>
+#include <mutex>
+#include <string>
+#include <thread>
+#include <vector>
+
+namespace platform {
+
+struct WifiAccessPoint {
+    std::string ssid;
+    std::string bssid;
+    int32_t frequency_mhz{0};
+    int32_t channel{0};
+    int32_t strength_percent{-1};
+    // Channel utilisation advertised by the AP in its BSS Load element, or -1 when unknown.
+    int32_t channel_utilization_percent{-1};
+};
+
+struct WifiScanResult {
+    bool ok{false};
+    std::string error;
+    std::vector<WifiAccessPoint> access_points;
+};
+
+// Maps a centre frequency to its IEEE 802.11 channel number, or 0 when unknown.
+int32_t wifi_frequency_to_channel(int32_t frequency_mhz);
+
+// Runs WiFi scans on a worker thread so the LVGL loop never blocks.
+//
+// Backends:
+//   Windows  - Native WLAN API (wlanapi). Needs Location access enabled in Windows Settings.
+//   Linux    - NetworkManager via `nmcli` (desktop Linux and the CardputerZero device).
+//   Others   - Reports an explicit "not supported" error.
+class WifiScanner {
+public:
+    WifiScanner();
+    ~WifiScanner();
+
+    WifiScanner(const WifiScanner&) = delete;
+    WifiScanner& operator=(const WifiScanner&) = delete;
+
+    void start(uint32_t interval_ms);
+    void stop();
+    void set_paused(bool paused);
+    bool paused() const;
+
+    // True while a scan request is in flight.
+    bool busy() const;
+
+    // Moves the newest unread result into `result`. Returns false when nothing new arrived.
+    bool take_result(WifiScanResult& result);
+
+private:
+    void run();
+
+    std::thread worker_;
+    mutable std::mutex mutex_;
+    std::condition_variable wake_;
+    WifiScanResult pending_;
+    bool has_pending_{false};
+    bool stop_requested_{false};
+    std::atomic<bool> paused_{false};
+    std::atomic<bool> busy_{false};
+    uint32_t interval_ms_{5000};
+};
+
+} // namespace platform

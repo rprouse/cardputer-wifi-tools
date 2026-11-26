@@ -21,18 +21,12 @@ struct HelpRow {
     const char* action;
 };
 
-constexpr std::array<HelpRow, 5> kAppleRows = {{
-    {"HOLD ESC / 4", "Exit"},
-    {"5", "Text weight"},
+constexpr std::array<HelpRow, 5> kChannelRows = {{
+    {"LEFT / RIGHT", "Select channel"},
+    {"5", "Switch 2.4 / 5 GHz"},
     {"6", "Light / dark"},
-    {"7", "Version info"},
-    {"8", "Open counter"},
-}};
-
-constexpr std::array<HelpRow, 3> kButterRows = {{
-    {"ESC", "Back to home"},
-    {"Z / LEFT", "Decrease"},
-    {"C / RIGHT", "Increase"},
+    {"7", "Pause / resume scan"},
+    {"HOLD ESC / 4", "Exit"},
 }};
 
 } // namespace
@@ -156,18 +150,16 @@ bool HelpPopup::visible() const {
 }
 
 void HelpPopup::update_rows(model::AppPage page) {
-    const bool butter = page == model::AppPage::Butter;
-    lv_label_set_text(page_badge_, butter ? "COUNTER" : "HOME");
+    LV_UNUSED(page);
+    lv_label_set_text(page_badge_, "CHANNELS");
     for (std::size_t i = 0; i < rows_.size(); ++i) {
-        const bool row_visible = butter ? i < kButterRows.size() : i < kAppleRows.size();
-        if (!row_visible) {
+        if (i >= kChannelRows.size()) {
             lv_obj_add_flag(rows_[i].row, LV_OBJ_FLAG_HIDDEN);
             continue;
         }
         lv_obj_remove_flag(rows_[i].row, LV_OBJ_FLAG_HIDDEN);
-        const auto& row = butter ? kButterRows[i] : kAppleRows[i];
-        lv_label_set_text(rows_[i].key, row.key);
-        lv_label_set_text(rows_[i].action, row.action);
+        lv_label_set_text(rows_[i].key, kChannelRows[i].key);
+        lv_label_set_text(rows_[i].action, kChannelRows[i].action);
     }
 }
 
