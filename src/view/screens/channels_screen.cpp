@@ -79,6 +79,9 @@ std::string detail_text(const model::WifiModel& wifi) {
 
 std::string header_text(const model::WifiModel& wifi) {
     std::string text = model::band_label(wifi.band());
+    if (!wifi.can_toggle_band()) {
+        text += " only";
+    }
     const auto& best = wifi.recommendation();
     if (best.first > 0) {
         text += "   best " + std::to_string(best.first);

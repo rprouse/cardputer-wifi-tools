@@ -50,6 +50,10 @@ NavBar::~NavBar() {
         lv_observer_remove(page_observer_);
         page_observer_ = nullptr;
     }
+    if (band_toggle_observer_) {
+        lv_observer_remove(band_toggle_observer_);
+        band_toggle_observer_ = nullptr;
+    }
 }
 
 void NavBar::build() {
@@ -72,6 +76,8 @@ void NavBar::build() {
     theme_observer_ = reactive::observe_obj(core_obj_, view_model_.dark_mode_subject(), update_icons_cb, this);
     paused_observer_ = reactive::observe_obj(core_obj_, view_model_.scan_paused_subject(), update_icons_cb, this);
     page_observer_ = reactive::observe_obj(core_obj_, view_model_.current_page_subject(), update_icons_cb, this);
+    band_toggle_observer_ =
+        reactive::observe_obj(core_obj_, view_model_.band_toggle_subject(), update_icons_cb, this);
     update_icon_buttons();
 }
 
@@ -109,7 +115,8 @@ void NavBar::update_icon_buttons() {
     const std::array<IconSpec, 5> icons = {{
         on_networks ? IconSpec{ICON_SQUARE_ARROW_LEFT, show_channels_cb}
                     : IconSpec{ICON_SQUARE_ARROW_RIGHT, show_networks_cb},
-        {ICON_WIFI_HIGH, toggle_band_cb},
+        // Single-band radios (e.g. 2.4 GHz only) leave the band button disabled.
+        {ICON_WIFI_HIGH, view_model_.can_toggle_band() ? toggle_band_cb : nullptr},
         {theme_icon, toggle_theme_cb},
         {scan_icon, toggle_scan_paused_cb},
         on_networks ? IconSpec{ICON_SORT, cycle_sort_cb} : IconSpec{"", nullptr},

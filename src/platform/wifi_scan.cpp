@@ -4,6 +4,7 @@
 
 #include "wifi_scan.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <string>
@@ -283,12 +284,7 @@ int32_t parse_int(const std::string& text, int32_t fallback) {
     }
 }
 
-bool run_nmcli(const char* rescan, std::string& output, int& exit_code) {
-    std::string command =
-        "LC_ALL=C nmcli -t -e yes -f IN-USE,BSSID,SSID,CHAN,FREQ,SIGNAL,SECURITY device wifi list --rescan ";
-    command += rescan;
-    command += " 2>&1";
-
+bool run_command(const std::string& command, std::string& output, int& exit_code) {
     FILE* pipe = popen(command.c_str(), "r");
     if (!pipe) {
         return false;
@@ -301,6 +297,98 @@ bool run_nmcli(const char* rescan, std::string& output, int& exit_code) {
     const int status = pclose(pipe);
     exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
     return true;
+}
+
+bool run_nmcli(const char* rescan, std::string& output, int& exit_code) {
+    std::string command =
+        "LC_ALL=C nmcli -t -e yes -f IN-USE,BSSID,SSID,CHAN,FREQ,SIGNAL,SECURITY device wifi list --rescan ";
+    command += rescan;
+    command += " 2>&1";
+    return run_command(command, output, exit_code);
+}
+
+// Works out which bands the WiFi devices NetworkManager scans with can use, from lines like
+// "GENERAL.STATE:100 (connected)" and "WIFI-PROPERTIES.5GHZ:no". Unmanaged devices (e.g. an
+// adapter in monitor mode) and unavailable ones (radio off) are skipped because nmcli does not
+// scan with them. Leaves both bands enabled when nothing conclusive comes back.
+void read_band_support(WifiScanResult& result) {
+    std::string output;
+    int exit_code = -1;
+    if (!run_command("LC_ALL=C nmcli -t -f GENERAL.STATE,WIFI-PROPERTIES device show 2>/dev/null",
+                     output,
+                     exit_code) ||
+        exit_code != 0) {
+        return;
+    }
+
+    bool usable = true;
+    bool seen = false;
+    bool any_24 = false;
+    bool any_5 = false;
+    size_t start = 0;
+    while (start < output.size()) {
+        auto end = output.find('\n', start);
+        if (end == std::string::npos) {
+            end = output.size();
+        }
+        std::string line = output.substr(start, end - start);
+        start = end + 1;
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+
+        const auto colon = line.find(':');
+        if (colon == std::string::npos) {
+            continue;
+        }
+        const std::string key = line.substr(0, colon);
+        const std::string value = line.substr(colon + 1);
+        if (key == "GENERAL.STATE") {
+            usable = value.find("unmanaged") == std::string::npos &&
+                     value.find("unavailable") == std::string::npos;
+            continue;
+        }
+        if (!usable) {
+            continue;
+        }
+        // "unknown" means the driver did not say; give it the benefit of the doubt.
+        const bool supported = value != "no";
+        if (key == "WIFI-PROPERTIES.2GHZ") {
+            seen = true;
+            any_24 |= supported;
+        }
+        else if (key == "WIFI-PROPERTIES.5GHZ") {
+            seen = true;
+            any_5 |= supported;
+        }
+    }
+
+    if (seen && (any_24 || any_5)) {
+        result.supports_24ghz = any_24;
+        result.supports_5ghz = any_5;
+    }
+}
+
+// With more than one adapter nmcli lists each access point once per adapter. Keep one entry per
+// BSSID with the strongest signal so networks are not double counted.
+void merge_duplicate_bssids(std::vector<WifiAccessPoint>& aps) {
+    std::vector<WifiAccessPoint> merged;
+    merged.reserve(aps.size());
+    for (auto& ap : aps) {
+        auto existing = std::find_if(merged.begin(), merged.end(), [&](const WifiAccessPoint& other) {
+            return !ap.bssid.empty() && other.bssid == ap.bssid;
+        });
+        if (existing == merged.end()) {
+            merged.push_back(std::move(ap));
+            continue;
+        }
+        const bool connected = existing->connected || ap.connected;
+        if (ap.strength_percent > existing->strength_percent) {
+            *existing = std::move(ap);
+        }
+        existing->connected = connected;
+    }
+    aps = std::move(merged);
 }
 
 std::string first_line(const std::string& text) {
@@ -358,6 +446,8 @@ public:
             }
         }
 
+        merge_duplicate_bssids(result.access_points);
+        read_band_support(result);
         result.ok = true;
         return result;
     }

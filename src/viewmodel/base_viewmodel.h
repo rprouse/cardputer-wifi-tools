@@ -33,6 +33,8 @@ public:
     lv_subject_t* wifi_revision_subject();
     lv_subject_t* scan_paused_subject();
     lv_subject_t* scan_status_subject();
+    // False when the radio only supports one band, so the band button is disabled.
+    lv_subject_t* band_toggle_subject();
 
     bool is_dark_mode() const;
     void set_dark_mode(bool enabled);
@@ -48,6 +50,7 @@ public:
     void start_scanning();
     const model::WifiModel& wifi() const;
     bool scan_paused() const;
+    bool can_toggle_band() const;
     void toggle_scan_paused();
     void toggle_band();
     void select_previous_channel();
@@ -79,6 +82,7 @@ private:
     reactive::IntSubject wifi_revision_subject_;
     reactive::BoolSubject scan_paused_subject_;
     reactive::StringSubject<48> scan_status_subject_;
+    reactive::BoolSubject band_toggle_subject_;
 };
 
 } // namespace viewmodel

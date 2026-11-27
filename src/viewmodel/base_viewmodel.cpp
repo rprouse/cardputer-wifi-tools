@@ -30,7 +30,8 @@ BaseViewModel::BaseViewModel()
       quit_requested_subject_(false),
       wifi_revision_subject_(0),
       scan_paused_subject_(false),
-      scan_status_subject_("Scanning...") {}
+      scan_status_subject_("Scanning..."),
+      band_toggle_subject_(true) {}
 
 BaseViewModel::~BaseViewModel() {
     if (poll_timer_) {
@@ -66,6 +67,10 @@ lv_subject_t* BaseViewModel::scan_paused_subject() {
 
 lv_subject_t* BaseViewModel::scan_status_subject() {
     return scan_status_subject_.native();
+}
+
+lv_subject_t* BaseViewModel::band_toggle_subject() {
+    return band_toggle_subject_.native();
 }
 
 bool BaseViewModel::is_dark_mode() const {
@@ -116,6 +121,10 @@ const model::WifiModel& BaseViewModel::wifi() const {
 
 bool BaseViewModel::scan_paused() const {
     return scanner_.paused();
+}
+
+bool BaseViewModel::can_toggle_band() const {
+    return wifi_model_.can_toggle_band();
 }
 
 void BaseViewModel::toggle_scan_paused() {
@@ -207,6 +216,10 @@ void BaseViewModel::poll_scanner() {
         has_result_ = true;
         last_result_tick_ = lv_tick_get();
         if (result.ok) {
+            wifi_model_.set_band_support(result.supports_24ghz, result.supports_5ghz);
+            if (band_toggle_subject_.value() != wifi_model_.can_toggle_band()) {
+                band_toggle_subject_.set(wifi_model_.can_toggle_band());
+            }
             std::vector<model::AccessPointInfo> aps;
             aps.reserve(result.access_points.size());
             for (auto& ap : result.access_points) {

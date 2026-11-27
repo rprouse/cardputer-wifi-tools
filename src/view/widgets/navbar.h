@@ -45,6 +45,7 @@ private:
     lv_observer_t* theme_observer_{nullptr};
     lv_observer_t* paused_observer_{nullptr};
     lv_observer_t* page_observer_{nullptr};
+    lv_observer_t* band_toggle_observer_{nullptr};
 };
 
 } // namespace view::widgets

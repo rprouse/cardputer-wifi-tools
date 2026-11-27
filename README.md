@@ -58,7 +58,7 @@ Channel chart:
 | Left / Right | Select channel |
 | `OK` (Enter) | List the networks on the selected channel |
 | `4` | List all networks in the band |
-| `5` | Switch between 2.4 GHz and 5 GHz |
+| `5` | Switch between 2.4 GHz and 5 GHz (disabled when the WiFi hardware is 2.4 GHz only) |
 | `6` | Light / dark theme |
 | `7` | Pause / resume scanning |
 | Hold `ESC` | Exit |
@@ -78,7 +78,7 @@ Network list:
 
 | Platform | Backend | Notes |
 | --- | --- | --- |
-| CardputerZero / Linux | NetworkManager via `nmcli` | Requests a rescan each cycle and falls back to cached results if the rescan is refused. `nmcli` does not expose BSS Load, so `load` is not shown. |
+| CardputerZero / Linux | NetworkManager via `nmcli` | Requests a rescan each cycle and falls back to cached results if the rescan is refused. `nmcli` does not expose BSS Load, so `load` is not shown. Scans use every WiFi adapter NetworkManager manages, so a USB adapter adds its bands and range (networks seen by more than one adapter are counted once). If no managed adapter supports 5 GHz, the header shows `2.4 GHz only` and the band key is disabled. |
 | Windows simulator | Native WLAN API (`wlanapi`) | Uses your PC's WiFi adapter. Windows requires **Location** access to be on for desktop apps, otherwise the scan reports "Access denied". |
 | macOS simulator | None | Shows "WiFi scanning is not supported on this platform." |
 

@@ -88,7 +88,12 @@ public:
     WifiModel();
 
     WifiBand band() const;
+    // Does nothing when the radio only supports one band.
     void toggle_band();
+    bool band_supported(WifiBand band) const;
+    bool can_toggle_band() const;
+    // Records which bands the radio can scan; moves to a supported band if the current one is not.
+    void set_band_support(bool ghz24, bool ghz5);
 
     // Channel chart
     const std::vector<ChannelStats>& channels() const;
@@ -128,6 +133,7 @@ private:
     std::vector<int32_t> filter_choices() const;
 
     WifiBand band_{WifiBand::Ghz24};
+    std::array<bool, 2> band_supported_{{true, true}};
     std::vector<AccessPointInfo> access_points_;
     std::vector<ChannelStats> channels_;
     ChannelRecommendation recommendation_;

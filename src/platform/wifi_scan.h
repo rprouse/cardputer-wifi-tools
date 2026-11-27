@@ -33,6 +33,9 @@ struct WifiScanResult {
     bool ok{false};
     std::string error;
     std::vector<WifiAccessPoint> access_points;
+    // Bands the WiFi radio(s) can scan. Both stay true when the backend cannot tell.
+    bool supports_24ghz{true};
+    bool supports_5ghz{true};
 };
 
 // Maps a centre frequency to its IEEE 802.11 channel number, or 0 when unknown.

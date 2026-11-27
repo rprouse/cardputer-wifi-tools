@@ -243,10 +243,34 @@ WifiBand WifiModel::band() const {
 }
 
 void WifiModel::toggle_band() {
+    if (!can_toggle_band()) {
+        return;
+    }
     band_ = band_ == WifiBand::Ghz24 ? WifiBand::Ghz5 : WifiBand::Ghz24;
     network_filter_ = 0;
     selected_bssid_.clear();
     rebuild();
+}
+
+bool WifiModel::band_supported(WifiBand band) const {
+    return band_supported_[static_cast<size_t>(band)];
+}
+
+bool WifiModel::can_toggle_band() const {
+    return band_supported_[0] && band_supported_[1];
+}
+
+void WifiModel::set_band_support(bool ghz24, bool ghz5) {
+    if (!ghz24 && !ghz5) {
+        return;
+    }
+    band_supported_ = {{ghz24, ghz5}};
+    if (!band_supported(band_)) {
+        band_ = ghz24 ? WifiBand::Ghz24 : WifiBand::Ghz5;
+        network_filter_ = 0;
+        selected_bssid_.clear();
+        rebuild();
+    }
 }
 
 const std::vector<ChannelStats>& WifiModel::channels() const {
