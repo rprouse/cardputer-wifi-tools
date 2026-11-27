@@ -27,6 +27,23 @@ struct WifiAccessPoint {
     std::string security;
     // True for the access point this device is currently associated with.
     bool connected{false};
+
+    // Extra detail; empty / 0 when the backend cannot report it.
+    int32_t signal_dbm{0};
+    // True when signal_dbm was estimated from the percentage (nmcli only reports a percentage).
+    bool signal_dbm_estimated{false};
+    int32_t channel_width_mhz{0};
+    int32_t max_rate_mbps{0};
+    // "Wi-Fi 6", "Wi-Fi 5", "Wi-Fi 4" or empty.
+    std::string standard;
+    // "Infra", "Ad-Hoc", "Mesh" or empty.
+    std::string mode;
+    // Key management, e.g. "PSK SAE", "802.1X".
+    std::string key_mgmt;
+    // Pairwise ciphers, e.g. "CCMP", "TKIP CCMP".
+    std::string ciphers;
+    // Interfaces that saw this access point, e.g. "wlan0 wlan1".
+    std::string devices;
 };
 
 struct WifiScanResult {

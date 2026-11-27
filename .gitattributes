@@ -1,0 +1,15 @@
+# Normalise text files to LF in the repository; Windows checkouts may use CRLF.
+* text=auto
+
+# Files that run or get packaged on the device must keep LF everywhere.
+*.sh            text eol=lf
+*.in            text eol=lf
+*.conf          text eol=lf
+cmake/**        text eol=lf
+
+# Binary assets
+*.png  binary
+*.jpg  binary
+*.ttf  binary
+*.otf  binary
+*.deb  binary

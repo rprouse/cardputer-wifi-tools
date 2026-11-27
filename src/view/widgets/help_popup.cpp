@@ -29,13 +29,38 @@ constexpr std::array<HelpRow, 5> kChannelRows = {{
     {"HOLD ESC", "Exit"},
 }};
 
-constexpr std::array<HelpRow, 5> kNetworkRows = {{
+constexpr std::array<HelpRow, 6> kNetworkRows = {{
     {"UP / DOWN", "Select network"},
+    {"OK", "Network details"},
     {"LEFT / RIGHT", "Filter by channel"},
     {"8", "Sort: signal / ch / name"},
     {"5 / 6 / 7", "Band / theme / pause"},
     {"ESC / 4", "Back to channels"},
 }};
+
+constexpr std::array<HelpRow, 3> kDetailRows = {{
+    {"UP / DOWN", "Previous / next network"},
+    {"6 / 7", "Theme / pause"},
+    {"ESC / 4", "Back to list"},
+}};
+
+struct HelpPage {
+    const HelpRow* rows;
+    std::size_t count;
+    const char* badge;
+};
+
+HelpPage help_page(model::AppPage page) {
+    switch (page) {
+        case model::AppPage::Networks:
+            return {kNetworkRows.data(), kNetworkRows.size(), "NETWORKS"};
+        case model::AppPage::NetworkDetail:
+            return {kDetailRows.data(), kDetailRows.size(), "DETAILS"};
+        case model::AppPage::Channels:
+        default:
+            return {kChannelRows.data(), kChannelRows.size(), "CHANNELS"};
+    }
+}
 
 } // namespace
 
@@ -87,11 +112,11 @@ void HelpPopup::build() {
 
     auto* rows = lv_obj_create(panel_);
     lv_obj_remove_style_all(rows);
-    lv_obj_set_size(rows, 268, 88);
-    lv_obj_align(rows, LV_ALIGN_TOP_MID, 0, 35);
+    lv_obj_set_size(rows, 268, 90);
+    lv_obj_align(rows, LV_ALIGN_TOP_MID, 0, 33);
     lv_obj_set_flex_flow(rows, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(rows, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-    lv_obj_set_style_pad_row(rows, 1, 0);
+    lv_obj_set_style_pad_row(rows, 0, 0);
     lv_obj_clear_flag(rows, LV_OBJ_FLAG_SCROLLABLE);
 
     auto* key_font = assets_.load_standard_font(11);
@@ -99,7 +124,7 @@ void HelpPopup::build() {
     for (auto& widgets : rows_) {
         widgets.row = lv_obj_create(rows);
         lv_obj_remove_style_all(widgets.row);
-        lv_obj_set_size(widgets.row, LV_PCT(100), 16);
+        lv_obj_set_size(widgets.row, LV_PCT(100), 15);
         lv_obj_clear_flag(widgets.row, LV_OBJ_FLAG_SCROLLABLE);
 
         widgets.key = lv_label_create(widgets.row);
@@ -158,11 +183,11 @@ bool HelpPopup::visible() const {
 }
 
 void HelpPopup::update_rows(model::AppPage page) {
-    const bool networks = page == model::AppPage::Networks;
-    const auto& rows = networks ? kNetworkRows : kChannelRows;
-    lv_label_set_text(page_badge_, networks ? "NETWORKS" : "CHANNELS");
+    const auto help = help_page(page);
+    const HelpRow* rows = help.rows;
+    lv_label_set_text(page_badge_, help.badge);
     for (std::size_t i = 0; i < rows_.size(); ++i) {
-        if (i >= rows.size()) {
+        if (i >= help.count) {
             lv_obj_add_flag(rows_[i].row, LV_OBJ_FLAG_HIDDEN);
             continue;
         }

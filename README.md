@@ -43,7 +43,20 @@ Built from the [CardputerZero application template](https://github.com/Cardputer
 
 ### Network list
 
-One row per access point: signal, name (`(hidden)` when not broadcast), channel and security. Your connected network is shown in bold blue. Security is red for open networks and amber for weak ones (WEP, WPA1, WPA1/2 mixed mode). The bottom line shows the selected access point's BSSID and frequency.
+One row per access point: signal, name (`(hidden)` when not broadcast), channel and security. Your connected network is shown in bold blue. Security is red for open networks and amber for weak ones (WEP, WPA1, WPA1/2 mixed mode). The bottom line shows the selected access point's BSSID and frequency. Press `OK` for the full details.
+
+### Network details
+
+Everything known about one access point. Fields the scanner can't report are left out.
+
+- **Header**: name, BSSID, and `virtual BSSID` when the address is locally administered (usually a guest network or an extra SSID on the same radio).
+- **Left column (radio)**: signal %, RSSI in dBm (`~` marks an estimate on Linux, where `nmcli` only reports a percentage), channel and frequency, channel width, Wi-Fi generation (Windows), maximum rate (Linux).
+- **Right column (security and neighbours)**:
+  - security, key management (`PSK`, `SAE`, `802.1X`, `OWE`) and pairwise ciphers (amber when TKIP or WEP is allowed);
+  - BSS Load (Windows);
+  - `Same SSID`: how many access points share the name and on which channels (mesh nodes, extenders, the other band);
+  - `Sharing`: other networks on the same channel and, on 2.4 GHz, overlapping ones;
+  - `Seen by`: which WiFi interfaces saw it (Linux).
 
 These are scan-based congestion measures, not packet counts. Counting real traffic needs a monitor-mode capable adapter.
 
@@ -70,9 +83,18 @@ Network list:
 | --- | --- |
 | Up / Down | Select network |
 | Left / Right | Filter by channel (all, then each channel in use) |
+| `OK` (Enter) | Details for the selected network |
 | `8` | Sort by signal, channel or name |
 | `5` / `6` / `7` | Band / theme / pause, as on the chart |
 | `ESC` or `4` | Back to the chart |
+
+Network details:
+
+| Key | Action |
+| --- | --- |
+| Up / Down | Previous / next network in the list |
+| `6` / `7` | Theme / pause |
+| `ESC` or `4` | Back to the list |
 
 ## Scan Backends
 
@@ -89,7 +111,7 @@ The app keeps the template's MVVM-style structure around LVGL:
 - **Platform**: `src/platform/wifi_scan.*` runs scans on a worker thread so the LVGL loop never blocks.
 - **Model**: `src/model/wifi_model.*` turns access points into per-channel statistics, the best-channel pick and the sorted, filtered network list.
 - **View model**: `BaseViewModel` owns the scanner, polls it on an LVGL timer, and publishes changes through LVGL subjects.
-- **View**: `src/view/screens/channels_screen.*` (chart) and `networks_screen.*` (list) re-render when the WiFi or theme subjects change.
+- **View**: `src/view/screens/channels_screen.*` (chart), `networks_screen.*` (list) and `network_detail_screen.*` (details) re-render when the WiFi or theme subjects change.
 
 ## Repository Layout
 
@@ -126,6 +148,7 @@ The app keeps the template's MVVM-style structure around LVGL:
 - `src/model/wifi_model.*`: per-channel statistics, band and channel selection.
 - `src/view/screens/channels_screen.*`: channel bar chart.
 - `src/view/screens/networks_screen.*`: network list.
+- `src/view/screens/network_detail_screen.*`: details for one network.
 - `src/app/desktop_simulator_frame.*`: owns the desktop SDL window, renderer, high-resolution shell textures, input, and LVGL texture composition.
 - `src/config/lv_conf_desktop.h`: desktop LVGL rendering settings.
 - `src/config/lv_conf_cm0.h`: embedded Linux/CardputerZero LVGL settings.
@@ -440,7 +463,7 @@ By default, the debian package is copied to '$HOME' folder, normally it's under 
 On your device, install the copied package with `apt` and replace the package file name with the one you copied:
 
 ```shell
-sudo apt install --no-install-recommends ./WiFiTools_0.1.0_rev1_arm64.deb
+sudo apt install --no-install-recommends ./WiFiTools_0.2.0_rev1_arm64.deb
 ```
 
 
@@ -499,7 +522,7 @@ Debian packages are produced with CPack and written to `dist/`. The package file
 Default example:
 
 ```text
-dist/WiFiTools_0.1.0_rev1_arm64.deb
+dist/WiFiTools_0.2.0_rev1_arm64.deb
 ```
 
 Package layout:

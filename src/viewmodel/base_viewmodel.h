@@ -44,6 +44,10 @@ public:
     // Opens the network list; filter_channel limits it to one channel (0 = all).
     void show_networks_page(int32_t filter_channel);
     void show_channels_page();
+    // Opens the details page for the selected network.
+    void show_network_detail_page();
+    // Back to the network list, keeping its filter and selection.
+    void return_to_networks_page();
     void request_quit();
 
     // WiFi scanning

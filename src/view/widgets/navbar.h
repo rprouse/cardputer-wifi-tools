@@ -32,6 +32,7 @@ private:
 
     static void show_networks_cb(lv_event_t* event);
     static void show_channels_cb(lv_event_t* event);
+    static void return_to_networks_cb(lv_event_t* event);
     static void cycle_sort_cb(lv_event_t* event);
     static void toggle_band_cb(lv_event_t* event);
     static void toggle_theme_cb(lv_event_t* event);

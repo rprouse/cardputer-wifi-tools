@@ -386,6 +386,39 @@ const AccessPointInfo* WifiModel::connected_network() const {
     return nullptr;
 }
 
+void WifiModel::pin_selected_network() {
+    if (const auto* ap = selected_network()) {
+        selected_bssid_ = ap->bssid;
+    }
+}
+
+bool WifiModel::selected_network_present() const {
+    const auto* ap = selected_network();
+    return ap && (selected_bssid_.empty() || ap->bssid == selected_bssid_);
+}
+
+std::vector<const AccessPointInfo*> WifiModel::same_ssid(const AccessPointInfo& ap) const {
+    std::vector<const AccessPointInfo*> matches;
+    for (const auto& other : access_points_) {
+        if (&other == &ap || (!ap.ssid.empty() && other.ssid == ap.ssid)) {
+            matches.push_back(&other);
+        }
+    }
+    std::sort(matches.begin(), matches.end(), [](const AccessPointInfo* a, const AccessPointInfo* b) {
+        return a->frequency_mhz < b->frequency_mhz;
+    });
+    return matches;
+}
+
+const ChannelStats* WifiModel::channel_stats(int32_t channel) const {
+    for (const auto& stats : channels_) {
+        if (stats.channel == channel) {
+            return &stats;
+        }
+    }
+    return nullptr;
+}
+
 void WifiModel::apply_scan(std::vector<AccessPointInfo> aps) {
     access_points_ = std::move(aps);
     status_ = ScanStatus::Ok;

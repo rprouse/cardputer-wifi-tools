@@ -169,36 +169,52 @@ private:
             return true;
         }
 
-        const bool on_networks = view_model_.current_page() == model::AppPage::Networks;
+        const auto page = view_model_.current_page();
+        const bool on_networks = page == model::AppPage::Networks;
+        const bool on_detail = page == model::AppPage::NetworkDetail;
         if (!long_pressed) {
             // Arrow keys are Fn+Z/X/C/F on the CardputerZero; plain Z/X/C/F work too (no text entry here).
             switch (key) {
                 case LV_KEY_LEFT:
                 case 'z':
                 case 'Z':
-                    on_networks ? view_model_.previous_network_filter() : view_model_.select_previous_channel();
+                    if (on_networks) {
+                        view_model_.previous_network_filter();
+                    }
+                    else if (!on_detail) {
+                        view_model_.select_previous_channel();
+                    }
                     return true;
                 case LV_KEY_RIGHT:
                 case 'c':
                 case 'C':
-                    on_networks ? view_model_.next_network_filter() : view_model_.select_next_channel();
+                    if (on_networks) {
+                        view_model_.next_network_filter();
+                    }
+                    else if (!on_detail) {
+                        view_model_.select_next_channel();
+                    }
                     return true;
                 case LV_KEY_UP:
                 case 'f':
                 case 'F':
-                    if (on_networks) {
+                    // On the details page this steps through the list without leaving the page.
+                    if (on_networks || on_detail) {
                         view_model_.select_previous_network();
                     }
                     return true;
                 case LV_KEY_DOWN:
                 case 'x':
                 case 'X':
-                    if (on_networks) {
+                    if (on_networks || on_detail) {
                         view_model_.select_next_network();
                     }
                     return true;
                 case LV_KEY_ENTER:
-                    if (!on_networks) {
+                    if (on_networks) {
+                        view_model_.show_network_detail_page();
+                    }
+                    else if (!on_detail) {
                         if (const auto* channel = view_model_.wifi().selected_channel()) {
                             view_model_.show_networks_page(channel->channel);
                         }
@@ -221,9 +237,12 @@ private:
         }
         else {
             exit_key_pressed_ = key;
-            // ESC goes back from the network list; on the chart, holding it exits.
-            exit_armed_ = !on_networks;
-            if (on_networks) {
+            // ESC goes back one page; on the chart, holding it exits.
+            exit_armed_ = !on_networks && !on_detail;
+            if (on_detail) {
+                view_model_.return_to_networks_page();
+            }
+            else if (on_networks) {
                 view_model_.show_channels_page();
             }
             else {

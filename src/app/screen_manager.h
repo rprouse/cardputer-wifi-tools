@@ -26,6 +26,7 @@ public:
     void start();
     void show_channels_screen();
     void show_networks_screen();
+    void show_network_detail_screen();
     void request_page(model::AppPage page);
     void flush_requested_page();
     lv_obj_t* current_screen() const;

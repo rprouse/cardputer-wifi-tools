@@ -50,7 +50,7 @@ private:
     lv_obj_t* title_{nullptr};
     lv_obj_t* page_badge_{nullptr};
     lv_obj_t* footer_{nullptr};
-    std::array<RowWidgets, 5> rows_{};
+    std::array<RowWidgets, 6> rows_{};
 };
 
 } // namespace view::widgets

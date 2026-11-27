@@ -110,13 +110,19 @@ void NavBar::create_icon_buttons() {
 void NavBar::update_icon_buttons() {
     const char* theme_icon = view_model_.is_dark_mode() ? ICON_SUN : ICON_MOON;
     const char* scan_icon = view_model_.scan_paused() ? ICON_PLAY : ICON_PAUSE;
-    const bool on_networks = view_model_.current_page() == model::AppPage::Networks;
-    // Keys 4-8 map to these buttons from left to right. ESC exits (chart) or goes back (list).
+    const auto page = view_model_.current_page();
+    const bool on_networks = page == model::AppPage::Networks;
+    const bool on_detail = page == model::AppPage::NetworkDetail;
+    // Keys 4-8 map to these buttons from left to right. ESC exits (chart) or goes back.
+    const IconSpec first = on_detail     ? IconSpec{ICON_SQUARE_ARROW_LEFT, return_to_networks_cb}
+                           : on_networks ? IconSpec{ICON_SQUARE_ARROW_LEFT, show_channels_cb}
+                                         : IconSpec{ICON_SQUARE_ARROW_RIGHT, show_networks_cb};
+    // Single-band radios (e.g. 2.4 GHz only) leave the band button disabled, as does the details
+    // page (the network shown belongs to one band).
+    const bool band_enabled = view_model_.can_toggle_band() && !on_detail;
     const std::array<IconSpec, 5> icons = {{
-        on_networks ? IconSpec{ICON_SQUARE_ARROW_LEFT, show_channels_cb}
-                    : IconSpec{ICON_SQUARE_ARROW_RIGHT, show_networks_cb},
-        // Single-band radios (e.g. 2.4 GHz only) leave the band button disabled.
-        {ICON_WIFI_HIGH, view_model_.can_toggle_band() ? toggle_band_cb : nullptr},
+        first,
+        {ICON_WIFI_HIGH, band_enabled ? toggle_band_cb : nullptr},
         {theme_icon, toggle_theme_cb},
         {scan_icon, toggle_scan_paused_cb},
         on_networks ? IconSpec{ICON_SORT, cycle_sort_cb} : IconSpec{"", nullptr},
@@ -132,6 +138,7 @@ void NavBar::update_icon_buttons() {
         button->set_text(icons[i].text);
         lv_obj_remove_event_cb(button->root(), show_networks_cb);
         lv_obj_remove_event_cb(button->root(), show_channels_cb);
+        lv_obj_remove_event_cb(button->root(), return_to_networks_cb);
         lv_obj_remove_event_cb(button->root(), cycle_sort_cb);
         lv_obj_remove_event_cb(button->root(), toggle_band_cb);
         lv_obj_remove_event_cb(button->root(), toggle_theme_cb);
@@ -155,6 +162,12 @@ void NavBar::show_networks_cb(lv_event_t* event) {
 void NavBar::show_channels_cb(lv_event_t* event) {
     if (auto* view_model = view_model_from(event)) {
         view_model->show_channels_page();
+    }
+}
+
+void NavBar::return_to_networks_cb(lv_event_t* event) {
+    if (auto* view_model = view_model_from(event)) {
+        view_model->return_to_networks_page();
     }
 }
 

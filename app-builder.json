@@ -1,7 +1,7 @@
 {
   "app_name": "WiFi Tools",
   "package_name": "wifi-tools",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "WiFi channel congestion scanner for CardputerZero",
   "store": {
     "summary": "See how crowded each WiFi channel is, on 2.4 GHz and 5 GHz.",

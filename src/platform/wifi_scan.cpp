@@ -5,6 +5,7 @@
 #include "wifi_scan.h"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cstdio>
 #include <string>
@@ -25,6 +26,26 @@
 
 namespace platform {
 namespace {
+
+// Appends a space-separated token once.
+[[maybe_unused]] void add_token(std::string& tokens, const char* token) {
+    const std::string needle(token);
+    size_t start = 0;
+    while (start <= tokens.size()) {
+        auto end = tokens.find(' ', start);
+        if (end == std::string::npos) {
+            end = tokens.size();
+        }
+        if (tokens.compare(start, end - start, needle) == 0) {
+            return;
+        }
+        start = end + 1;
+    }
+    if (!tokens.empty()) {
+        tokens.push_back(' ');
+    }
+    tokens += token;
+}
 
 #if defined(_WIN32)
 
@@ -55,18 +76,33 @@ int32_t read_bss_load_utilization(const unsigned char* ies, unsigned long size) 
     return -1;
 }
 
-void add_token(std::string& tokens, const char* token) {
-    if (tokens.find(token) != std::string::npos) {
-        return;
+const char* cipher_name(unsigned char suite) {
+    switch (suite) {
+        case 1:
+        case 5:
+            return "WEP";
+        case 2:
+            return "TKIP";
+        case 4:
+            return "CCMP";
+        case 8:
+            return "GCMP";
+        case 9:
+            return "GCMP-256";
+        case 10:
+            return "CCMP-256";
+        default:
+            return nullptr;
     }
-    if (!tokens.empty()) {
-        tokens.push_back(' ');
-    }
-    tokens += token;
 }
 
-// Decodes the AKM suites of an RSN element (ID 48) into WPA2/WPA3/802.1X/OWE tokens.
-void read_rsn_akms(const unsigned char* data, unsigned char length, std::string& tokens) {
+// Decodes an RSN element (ID 48): AKM suites into WPA2/WPA3/802.1X/OWE tokens, plus the key
+// management and pairwise cipher names shown on the details page.
+void read_rsn(const unsigned char* data,
+              unsigned char length,
+              std::string& tokens,
+              std::string& key_mgmt,
+              std::string& ciphers) {
     // version(2) + group cipher(4) + pairwise count(2)
     if (length < 8) {
         add_token(tokens, "WPA2");
@@ -74,6 +110,14 @@ void read_rsn_akms(const unsigned char* data, unsigned char length, std::string&
     }
     size_t offset = 6;
     const size_t pairwise_count = data[offset] | (data[offset + 1] << 8);
+    for (size_t i = 0; i < pairwise_count && offset + 2 + 4 * i + 4 <= length; ++i) {
+        const unsigned char* suite = data + offset + 2 + 4 * i;
+        if (suite[0] == 0x00 && suite[1] == 0x0F && suite[2] == 0xAC) {
+            if (const char* name = cipher_name(suite[3])) {
+                add_token(ciphers, name);
+            }
+        }
+    }
     offset += 2 + 4 * pairwise_count;
     if (offset + 2 > length) {
         add_token(tokens, "WPA2");
@@ -93,24 +137,29 @@ void read_rsn_akms(const unsigned char* data, unsigned char length, std::string&
             case 5:
                 add_token(tokens, "WPA2");
                 add_token(tokens, "802.1X");
+                add_token(key_mgmt, "802.1X");
                 break;
             case 12:
                 add_token(tokens, "WPA3");
                 add_token(tokens, "802.1X");
+                add_token(key_mgmt, "802.1X");
                 break;
             case 2:
             case 4:
             case 6:
                 add_token(tokens, "WPA2");
+                add_token(key_mgmt, "PSK");
                 break;
             case 8:
             case 9:
             case 24:
             case 25:
                 add_token(tokens, "WPA3");
+                add_token(key_mgmt, "SAE");
                 break;
             case 18:
                 add_token(tokens, "OWE");
+                add_token(key_mgmt, "OWE");
                 break;
             default:
                 add_token(tokens, "WPA2");
@@ -122,8 +171,15 @@ void read_rsn_akms(const unsigned char* data, unsigned char length, std::string&
     }
 }
 
-std::string read_security(const unsigned char* ies, unsigned long size, bool privacy) {
+// Fills security tokens, key management, ciphers, Wi-Fi generation and channel width from the
+// beacon / probe response information elements.
+void read_ies(const unsigned char* ies, unsigned long size, bool privacy, WifiAccessPoint& ap) {
     std::string tokens;
+    bool ht = false;
+    bool vht = false;
+    bool he = false;
+    bool eht = false;
+    int32_t width = 20;
     unsigned long offset = 0;
     while (offset + 2 <= size) {
         const unsigned char id = ies[offset];
@@ -133,18 +189,53 @@ std::string read_security(const unsigned char* ies, unsigned long size, bool pri
         }
         const unsigned char* data = ies + offset + 2;
         if (id == 48) {
-            read_rsn_akms(data, length, tokens);
+            read_rsn(data, length, tokens, ap.key_mgmt, ap.ciphers);
         }
         else if (id == 221 && length >= 4 && data[0] == 0x00 && data[1] == 0x50 && data[2] == 0xF2 &&
                  data[3] == 0x01) {
             add_token(tokens, "WPA1");
+            if (ap.ciphers.empty()) {
+                add_token(ap.ciphers, "TKIP");
+            }
+        }
+        else if (id == 45) {
+            ht = true;
+        }
+        else if (id == 61 && length >= 2) {
+            // HT Operation: STA channel width bit set means 40 MHz is in use.
+            if ((data[1] & 0x04) != 0) {
+                width = std::max<int32_t>(width, 40);
+            }
+        }
+        else if (id == 191) {
+            vht = true;
+        }
+        else if (id == 192 && length >= 3) {
+            // VHT Operation: width 1 = 80 MHz, or 160 MHz when the second segment is set.
+            if (data[0] == 1) {
+                width = std::max<int32_t>(width, data[2] != 0 ? 160 : 80);
+            }
+            else if (data[0] == 2 || data[0] == 3) {
+                width = std::max<int32_t>(width, 160);
+            }
+        }
+        else if (id == 255 && length >= 1) {
+            if (data[0] == 35) {
+                he = true;
+            }
+            else if (data[0] == 108) {
+                eht = true;
+            }
         }
         offset += 2U + length;
     }
     if (tokens.empty() && privacy) {
         tokens = "WEP";
+        ap.ciphers = "WEP";
     }
-    return tokens;
+    ap.security = tokens;
+    ap.standard = eht ? "Wi-Fi 7" : he ? "Wi-Fi 6" : vht ? "Wi-Fi 5" : ht ? "Wi-Fi 4" : "";
+    ap.channel_width_mhz = width;
 }
 
 std::string describe_wlan_error(const char* call, DWORD code) {
@@ -234,9 +325,11 @@ public:
             ap.frequency_mhz = static_cast<int32_t>(entry.ulChCenterFrequency / 1000);
             ap.channel = wifi_frequency_to_channel(ap.frequency_mhz);
             ap.strength_percent = static_cast<int32_t>(entry.uLinkQuality);
+            ap.signal_dbm = static_cast<int32_t>(entry.lRssi);
+            ap.mode = entry.dot11BssType == dot11_BSS_type_independent ? "Ad-Hoc" : "Infra";
             const auto* ies = reinterpret_cast<const unsigned char*>(&entry) + entry.ulIeOffset;
             ap.channel_utilization_percent = read_bss_load_utilization(ies, entry.ulIeSize);
-            ap.security = read_security(ies, entry.ulIeSize, (entry.usCapabilityInformation & 0x0010) != 0);
+            read_ies(ies, entry.ulIeSize, (entry.usCapabilityInformation & 0x0010) != 0, ap);
             ap.connected = !connected_bssid.empty() && ap.bssid == connected_bssid;
             result.access_points.push_back(std::move(ap));
         }
@@ -299,12 +392,55 @@ bool run_command(const std::string& command, std::string& output, int& exit_code
     return true;
 }
 
-bool run_nmcli(const char* rescan, std::string& output, int& exit_code) {
-    std::string command =
-        "LC_ALL=C nmcli -t -e yes -f IN-USE,BSSID,SSID,CHAN,FREQ,SIGNAL,SECURITY device wifi list --rescan ";
+// Columns 0-11 exist in every NetworkManager release; BANDWIDTH (12) needs NetworkManager 1.46+.
+constexpr const char* kNmcliFields = "IN-USE,BSSID,SSID,CHAN,FREQ,SIGNAL,SECURITY,MODE,RATE,RSN-FLAGS,WPA-FLAGS,DEVICE";
+
+bool run_nmcli(const char* rescan, bool with_bandwidth, std::string& output, int& exit_code) {
+    std::string command = "LC_ALL=C nmcli -t -e yes -f ";
+    command += kNmcliFields;
+    if (with_bandwidth) {
+        command += ",BANDWIDTH";
+    }
+    command += " device wifi list --rescan ";
     command += rescan;
     command += " 2>&1";
     return run_command(command, output, exit_code);
+}
+
+// Turns nmcli RSN/WPA flags ("pair_ccmp group_ccmp psk sae") into key management and pairwise
+// cipher names.
+void read_nm_flags(const std::string& flags, std::string& key_mgmt, std::string& ciphers) {
+    size_t start = 0;
+    while (start < flags.size()) {
+        auto end = flags.find(' ', start);
+        if (end == std::string::npos) {
+            end = flags.size();
+        }
+        const std::string flag = flags.substr(start, end - start);
+        start = end + 1;
+        if (flag.rfind("pair_", 0) == 0) {
+            std::string name = flag.substr(5);
+            for (auto& ch : name) {
+                ch = ch == '_' ? '-' : static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+            }
+            if (name.rfind("WEP", 0) == 0) {
+                name = "WEP";
+            }
+            add_token(ciphers, name.c_str());
+        }
+        else if (flag == "psk") {
+            add_token(key_mgmt, "PSK");
+        }
+        else if (flag == "sae") {
+            add_token(key_mgmt, "SAE");
+        }
+        else if (flag == "802.1X") {
+            add_token(key_mgmt, "802.1X");
+        }
+        else if (flag == "owe" || flag == "owe_tm") {
+            add_token(key_mgmt, "OWE");
+        }
+    }
 }
 
 // Works out which bands the WiFi devices NetworkManager scans with can use, from lines like
@@ -383,10 +519,13 @@ void merge_duplicate_bssids(std::vector<WifiAccessPoint>& aps) {
             continue;
         }
         const bool connected = existing->connected || ap.connected;
+        std::string devices = existing->devices;
+        add_token(devices, ap.devices.c_str());
         if (ap.strength_percent > existing->strength_percent) {
             *existing = std::move(ap);
         }
         existing->connected = connected;
+        existing->devices = std::move(devices);
     }
     aps = std::move(merged);
 }
@@ -396,13 +535,18 @@ std::string first_line(const std::string& text) {
     return end == std::string::npos ? text : text.substr(0, end);
 }
 
+int32_t parse_leading_int(const std::string& text) {
+    // "540 Mbit/s", "80 MHz"
+    return parse_int(text, 0);
+}
+
 class ScanBackend {
 public:
     WifiScanResult scan() {
         WifiScanResult result;
         std::string output;
         int exit_code = -1;
-        if (!run_nmcli("yes", output, exit_code)) {
+        if (!list(output, exit_code)) {
             result.error = "Could not start nmcli.";
             return result;
         }
@@ -411,11 +555,8 @@ public:
             return result;
         }
         if (exit_code != 0) {
-            // Rescans can be refused (permissions, rate limits); fall back to cached results.
-            if (!run_nmcli("no", output, exit_code) || exit_code != 0) {
-                result.error = "nmcli: " + first_line(output);
-                return result;
-            }
+            result.error = "nmcli: " + first_line(output);
+            return result;
         }
 
         size_t start = 0;
@@ -441,6 +582,21 @@ public:
             }
             ap.strength_percent = parse_int(fields[5], -1);
             ap.security = fields[6] == "--" ? std::string() : fields[6];
+            if (ap.strength_percent >= 0) {
+                // Inverse of NetworkManager's dBm-to-percent mapping (-100 dBm = 0%, -40 dBm = 100%).
+                ap.signal_dbm = -40 - (100 - std::min<int32_t>(ap.strength_percent, 100)) * 60 / 100;
+                ap.signal_dbm_estimated = true;
+            }
+            if (fields.size() >= 12) {
+                ap.mode = fields[7];
+                ap.max_rate_mbps = parse_leading_int(fields[8]);
+                read_nm_flags(fields[9], ap.key_mgmt, ap.ciphers);
+                read_nm_flags(fields[10], ap.key_mgmt, ap.ciphers);
+                ap.devices = fields[11];
+            }
+            if (fields.size() >= 13) {
+                ap.channel_width_mhz = parse_leading_int(fields[12]);
+            }
             if (ap.channel > 0) {
                 result.access_points.push_back(std::move(ap));
             }
@@ -451,6 +607,32 @@ public:
         result.ok = true;
         return result;
     }
+
+private:
+    // Lists networks, asking for a rescan first. Rescans can be refused (permissions, rate
+    // limits), in which case cached results are used. Older NetworkManager releases reject the
+    // BANDWIDTH column; drop it once and remember.
+    bool list(std::string& output, int& exit_code) {
+        for (int attempt = 0; attempt < 2; ++attempt) {
+            if (!run_nmcli("yes", with_bandwidth_, output, exit_code)) {
+                return false;
+            }
+            if (exit_code != 0 && exit_code != 127 &&
+                !(with_bandwidth_ && output.find("BANDWIDTH") != std::string::npos)) {
+                if (!run_nmcli("no", with_bandwidth_, output, exit_code)) {
+                    return false;
+                }
+            }
+            if (exit_code != 0 && with_bandwidth_ && output.find("BANDWIDTH") != std::string::npos) {
+                with_bandwidth_ = false;
+                continue;
+            }
+            return true;
+        }
+        return true;
+    }
+
+    bool with_bandwidth_{true};
 };
 
 #else

@@ -98,6 +98,20 @@ void BaseViewModel::show_networks_page(int32_t filter_channel) {
     publish_all();
 }
 
+void BaseViewModel::show_network_detail_page() {
+    if (!wifi_model_.selected_network()) {
+        return;
+    }
+    wifi_model_.pin_selected_network();
+    model_.set_current_page(model::AppPage::NetworkDetail);
+    publish_all();
+}
+
+void BaseViewModel::return_to_networks_page() {
+    model_.set_current_page(model::AppPage::Networks);
+    publish_all();
+}
+
 void BaseViewModel::show_channels_page() {
     model_.set_current_page(model::AppPage::Channels);
     publish_all();
@@ -223,14 +237,25 @@ void BaseViewModel::poll_scanner() {
             std::vector<model::AccessPointInfo> aps;
             aps.reserve(result.access_points.size());
             for (auto& ap : result.access_points) {
-                aps.push_back(model::AccessPointInfo{std::move(ap.ssid),
-                                                     std::move(ap.bssid),
-                                                     ap.frequency_mhz,
-                                                     ap.channel,
-                                                     ap.strength_percent,
-                                                     ap.channel_utilization_percent,
-                                                     std::move(ap.security),
-                                                     ap.connected});
+                model::AccessPointInfo info;
+                info.ssid = std::move(ap.ssid);
+                info.bssid = std::move(ap.bssid);
+                info.frequency_mhz = ap.frequency_mhz;
+                info.channel = ap.channel;
+                info.strength_percent = ap.strength_percent;
+                info.channel_utilization_percent = ap.channel_utilization_percent;
+                info.security = std::move(ap.security);
+                info.connected = ap.connected;
+                info.signal_dbm = ap.signal_dbm;
+                info.signal_dbm_estimated = ap.signal_dbm_estimated;
+                info.channel_width_mhz = ap.channel_width_mhz;
+                info.max_rate_mbps = ap.max_rate_mbps;
+                info.standard = std::move(ap.standard);
+                info.mode = std::move(ap.mode);
+                info.key_mgmt = std::move(ap.key_mgmt);
+                info.ciphers = std::move(ap.ciphers);
+                info.devices = std::move(ap.devices);
+                aps.push_back(std::move(info));
             }
             wifi_model_.apply_scan(std::move(aps));
         }

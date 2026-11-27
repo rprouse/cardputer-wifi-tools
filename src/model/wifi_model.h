@@ -26,6 +26,17 @@ struct AccessPointInfo {
     // Raw security tokens from the scanner ("WPA2 WPA3", "WEP", ...); empty means open.
     std::string security;
     bool connected{false};
+
+    // Details page; 0 / empty when the scanner could not report them.
+    int32_t signal_dbm{0};
+    bool signal_dbm_estimated{false};
+    int32_t channel_width_mhz{0};
+    int32_t max_rate_mbps{0};
+    std::string standard;
+    std::string mode;
+    std::string key_mgmt;
+    std::string ciphers;
+    std::string devices;
 };
 
 enum class SecurityLevel {
@@ -118,6 +129,14 @@ public:
     void cycle_network_sort();
 
     const AccessPointInfo* connected_network() const;
+    // Remembers the selected network by BSSID so it can be followed across rescans.
+    void pin_selected_network();
+    // False once the pinned network has dropped out of the scan results.
+    bool selected_network_present() const;
+    // Access points sharing this network's SSID (in any band), including itself.
+    std::vector<const AccessPointInfo*> same_ssid(const AccessPointInfo& ap) const;
+    // Stats for a channel in the current band, or nullptr.
+    const ChannelStats* channel_stats(int32_t channel) const;
 
     void apply_scan(std::vector<AccessPointInfo> aps);
     void apply_error(std::string error);
