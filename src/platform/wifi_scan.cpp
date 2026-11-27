@@ -1,4 +1,6 @@
 /*
+ * SPDX-FileCopyrightText: 2026 Rob Prouse
+ *
  * SPDX-License-Identifier: MIT
  */
 
